@@ -3,7 +3,7 @@
 **QIntern 2026 | QWorld**
 **Mentor:** Potluri Krishna Priyatham
 **Team:** Pushkar Kumar (orchestration + integration), Klasik Taidi (Track A), Hoang Dinh Duy Anh (Track B)
-**Timeline:** July 26 – August 13, 2026
+**Timeline:** July 1 – August 13, 2026
 
 ---
 
