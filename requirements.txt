@@ -1,0 +1,10 @@
+qiskit>=1.0
+qiskit-aer
+pennylane
+numpy
+matplotlib
+opencv-python
+pillow
+jupyter
+scipy
+pandas
