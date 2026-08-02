@@ -1,4 +1,4 @@
-qiskit>=2.5
+qiskit>=1.0
 qiskit-aer
 pennylane
 numpy
@@ -8,3 +8,4 @@ pillow
 jupyter
 scipy
 pandas
+pylatexenc
