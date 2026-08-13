@@ -1,0 +1,41 @@
+{
+  "rows": [
+    {
+      "patch": "2x2",
+      "pixels": 4,
+      "frqi_qubits": 3,
+      "frqi_depth": 49,
+      "frqi_cx": 32,
+      "neqr_qubits": 10,
+      "neqr_depth": 194,
+      "neqr_cx": 114,
+      "qubit_ratio": 3.333,
+      "cx_ratio": 3.562
+    },
+    {
+      "patch": "4x4",
+      "pixels": 16,
+      "frqi_qubits": 5,
+      "frqi_depth": 515,
+      "frqi_cx": 384,
+      "neqr_qubits": 12,
+      "neqr_depth": 2955,
+      "neqr_cx": 1558,
+      "qubit_ratio": 2.4,
+      "cx_ratio": 4.057
+    },
+    {
+      "patch": "8x8",
+      "pixels": 64,
+      "frqi_qubits": 7,
+      "frqi_depth": 4107,
+      "frqi_cx": 3584,
+      "neqr_qubits": 14,
+      "neqr_depth": 20882,
+      "neqr_cx": 10998,
+      "qubit_ratio": 2.0,
+      "cx_ratio": 3.069
+    }
+  ],
+  "qubit_ratio_verdict": "NARROWS"
+}

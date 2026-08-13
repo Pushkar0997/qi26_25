@@ -49,8 +49,40 @@ def random_entangling_circuit(n_qubits, seed=42, depth=2):
     return qc
 
 
+def entangling_circuit_from_angles(angles, n_qubits, depth=2):
+    """Same architecture as random_entangling_circuit, but with the RY angles
+    supplied rather than drawn from an RNG. This is what makes the filter
+    variational: the angles become trainable parameters."""
+    angles = np.asarray(angles, dtype=float).reshape(depth, n_qubits)
+    qc = QuantumCircuit(n_qubits)
+    for d in range(depth):
+        for q in range(n_qubits):
+            qc.ry(float(angles[d, q]), q)
+        for q in range(n_qubits - 1):
+            qc.cx(q, q + 1)
+        qc.cx(n_qubits - 1, 0)
+    return qc
+
+
+def initial_angles(n_qubits, seed=42, depth=2):
+    """The angles the untrained random filter happens to use, so training can
+    start from exactly the baseline configuration and any improvement is
+    attributable to optimisation alone."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in range(depth):
+        out.extend(rng.uniform(0, 2 * np.pi, n_qubits))
+        # the CX ring consumes no randomness; kept in step with the original
+    return np.array(out)
+
+
 def _filter_unitary(n_qubits, seed, depth):
     return np.asarray(Operator(random_entangling_circuit(n_qubits, seed, depth)).data)
+
+
+def _unitary_from_angles(angles, n_qubits, depth):
+    return np.asarray(Operator(
+        entangling_circuit_from_angles(angles, n_qubits, depth)).data)
 
 
 def _encode_batch(patches):
@@ -76,12 +108,13 @@ def _encode_batch(patches):
 
 
 def quanv_patch_probs(patches, n_qubits=4, seed=42, depth=2, shots=None, rng=None,
-                      correlations=False):
+                      correlations=False, angles=None):
     """Per-qubit P(measure 1), optionally plus <Z_i Z_j> pairwise correlations.
 
     Output width is n_qubits, or n_qubits + C(n_qubits, 2) when correlations
     are enabled."""
-    U = _filter_unitary(n_qubits, seed, depth)
+    U = (_unitary_from_angles(angles, n_qubits, depth) if angles is not None
+         else _filter_unitary(n_qubits, seed, depth))
     states = _encode_batch(patches) @ U.T
     probs = np.abs(states) ** 2                     # (n, 2**n_qubits)
 
@@ -115,7 +148,7 @@ def quanv_patch_probs(patches, n_qubits=4, seed=42, depth=2, shots=None, rng=Non
 
 
 def quanv_features(images, patch_size=2, n_qubits=4, seed=42, depth=2,
-                   stride=None, shots=None, correlations=False):
+                   stride=None, shots=None, correlations=False, angles=None):
     """Apply the quanvolutional layer across a batch of images.
 
     images: (n, H, W) uint8/float. Returns (n, out_h * out_w * n_qubits).
@@ -140,7 +173,7 @@ def quanv_features(images, patch_size=2, n_qubits=4, seed=42, depth=2,
 
     probs = quanv_patch_probs(patches, n_qubits=n_qubits, seed=seed,
                               depth=depth, shots=shots,
-                              correlations=correlations)
+                              correlations=correlations, angles=angles)
     n_feat = probs.shape[1]
     probs = probs.reshape(out_h * out_w, n, n_feat)
     return probs.transpose(1, 0, 2).reshape(n, -1)
@@ -176,6 +209,31 @@ def classical_conv(images, patch_size=2, n_filters=4, seed=42, stride=None):
             y, x = oy * stride, ox * stride
             block = images[:, y:y + patch_size, x:x + patch_size].reshape(n, -1)
             feats[:, k, :] = np.tanh(block @ filters.T)   # bounded, like probs
+            k += 1
+    return feats.reshape(n, -1)
+
+
+def classical_conv_from_weights(images, weights, patch_size=2, stride=None):
+    """Classical convolution with explicit (trainable) filter weights, so the
+    classical control can be optimised on exactly the same footing as the
+    quantum filter. Training only the quantum side would invert the unfairness
+    the untrained comparison was designed to avoid."""
+    images = np.asarray(images, dtype=float) / 255.0
+    if images.ndim == 2:
+        images = images[None, ...]
+    n, H, W = images.shape
+    stride = stride or patch_size
+    out_h = (H - patch_size) // stride + 1
+    out_w = (W - patch_size) // stride + 1
+    weights = np.asarray(weights, dtype=float).reshape(-1, patch_size * patch_size)
+
+    feats = np.empty((n, out_h * out_w, weights.shape[0]))
+    k = 0
+    for oy in range(out_h):
+        for ox in range(out_w):
+            y, x = oy * stride, ox * stride
+            block = images[:, y:y + patch_size, x:x + patch_size].reshape(n, -1)
+            feats[:, k, :] = np.tanh(block @ weights.T)
             k += 1
     return feats.reshape(n, -1)
 

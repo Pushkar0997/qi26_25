@@ -5,12 +5,14 @@
 **Mentor:** Potluri Krishna Priyatham
 **Repository:** github.com/Pushkar0997/qi26_25
 
-> **Draft status (Aug 10).** Sections 1–6 are written and every number in them is
-> measured, reproducible from `benchmarking/run_benchmark.py`. All figures below
-> come from the Windows reference run (Arial / Times New Roman Italic, seed 26);
-> `manifest.json` records the exact fonts and platform used. Section 7
-> (variational filter) is scheduled for Aug 11 and Section 9 (figures) for
-> Aug 12. Placeholders are marked **[PENDING]** so nothing ships silently empty.
+> **Status: complete (Aug 13, 2026).** Every number in this report is measured
+> and reproducible via the commands in §11 — none are estimated. Figures are
+> generated from the committed results files, so they cannot disagree with the
+> tables. All results come from the Windows reference run (Arial / Times New
+> Roman Italic, seed 26); `manifest.json` records the exact fonts and platform,
+> since glyph rendering shifts absolute accuracy by a fraction of a percent
+> between operating systems. Comparative conclusions were checked on two
+> platforms and are unchanged.
 
 ---
 
@@ -85,8 +87,32 @@ At 2×2 (4 pixels), verified by simulation: NEQR reconstructs pixel values
 exactly; FRQI reconstructs approximately (error ~1–2 levels out of 255 at 8192
 shots), at 3 qubits versus 10 and roughly 2.5× fewer CX gates.
 
-**[PENDING — Aug 11]** Re-run at 4×4 (16 pixels) to test the prediction that the
-qubit/gate gap widens with patch size.
+Measured across three patch sizes (`track_a_vision/encoding/encoding_scaling.py`):
+
+| Patch | Pixels | FRQI qubits / depth / CX | NEQR qubits / depth / CX | Qubit ratio |
+|---|---|---|---|---|
+| 2×2 | 4 | 3 / 49 / 32 | 10 / 194 / 114 | 3.33× |
+| 4×4 | 16 | 5 / 515 / 384 | 12 / 2,955 / 1,558 | 2.40× |
+| 8×8 | 64 | 7 / 4,107 / 3,584 | 14 / 20,882 / 10,998 | 2.00× |
+
+**The Week 1 hypothesis is refuted.** That summary predicted the qubit gap would
+"widen, not shrink" as patches grow. Measured, the ratio *narrows*: 3.33× → 2.40×
+→ 2.00×.
+
+The original reasoning conflated two different costs. FRQI's colour register is
+fixed at 1 qubit and NEQR's at 8, so the colour gap is a *constant* 7 qubits at
+every patch size — while both encodings share an identically growing position
+register of ⌈log₂(pixels)⌉. A constant gap divided by a growing shared base
+necessarily shrinks as a ratio. Absolute CX counts do grow steeply for both
+(NEQR reaching ~11,000 at 8×8), so NEQR remains far more expensive in absolute
+terms; it is specifically the *relative* qubit penalty that decays.
+
+Practical consequence for the pipeline: NEQR's exactness becomes progressively
+cheaper to buy at larger patch sizes, which strengthens rather than weakens the
+Week 1 recommendation to prefer NEQR for OCR — but for the opposite reason to
+the one originally given.
+
+![Encoding scaling](../benchmarking/figures/encoding_scaling.png)
 
 ### 3.2 Quanvolutional layer
 
@@ -268,12 +294,83 @@ patched around.
 
 ---
 
-## 7. Variational quantum filter — **[PENDING — Aug 11]**
+## 7. Variational quantum filter
 
-Section 5 shows an *untrained* random filter losing to raw pixels, with its
-classical analogue failing identically. The remaining question is whether
-optimising the filter's rotation angles against classification loss closes the
-gap. Result to be recorded here whichever way it comes out.
+Section 5 showed an *untrained* random filter losing to raw pixels, with its
+classical analogue failing identically. This section answers the remaining
+question, and is the project brief's Week 2 VQC deliverable.
+
+**Method.** The filter's 8 RY angles were optimised by gradient-free Powell
+search, starting from the exact angle vector the untrained baseline uses, so any
+change is attributable to optimisation alone. Each objective evaluation fits a
+closed-form ridge head and returns validation error; closed form removes
+optimiser-inside-optimiser noise. **The classical control was trained too**, with
+the same optimiser and budget — training only the quantum side would have
+inverted the very unfairness the untrained comparison was built to avoid.
+
+**Results** (accuracy on a sealed test partition of 1,807 crops):
+
+| Configuration | Trainable params | Accuracy | Δ vs untrained |
+|---|---|---|---|
+| Quantum, untrained | — | 91.7% | — |
+| Quantum, trained | 8 | 90.6% | **−1.1 pt** |
+| Classical, untrained | — | 92.0% | — |
+| Classical, trained | 40 | 92.1% | +0.1 pt |
+| Raw pixels | — | **93.6%** | — |
+
+*(Absolute values here differ slightly from §5 because the evaluation protocol
+differs: §5 uses a 75/25 split of the whole dataset, while this section holds out
+a sealed 30% partition that the angle search never sees. Only §7 numbers should
+be compared with each other.)*
+
+**Training does not close the gap — and for the quantum filter it actively
+hurts.** Raw pixels still lead the best trained filter by 1.5 points.
+
+The failure mode is visible in the optimiser trace: the quantum search improved
+its *validation* accuracy from 86.2% to 88.1% while sealed-test accuracy fell
+from 91.7% to 90.6%. Eight parameters optimised by Powell against a step-function
+accuracy objective is enough to fit the validation split's noise rather than
+signal. This is a real limitation of the training protocol, not evidence about
+quantum circuits as such — a smooth surrogate loss and cross-validated folds
+would be the correct fix, and are named here as future work rather than claimed.
+
+**This was measured twice, on independently generated datasets.** The pipeline
+was run on two platforms whose different font rendering produces different crops
+(Linux/Liberation and Windows/Arial):
+
+| Run | Quantum Δ | Classical Δ | Raw-pixel lead |
+|---|---|---|---|
+| Linux (Liberation fonts) | +0.0 pt | −0.3 pt | +1.7 pt |
+| Windows (Arial / Times) | −1.1 pt | +0.1 pt | +1.5 pt |
+
+Training never produced a meaningful gain in either run, and the raw-pixel lead
+was stable at 1.5–1.7 points across both. The Section 5 conclusion therefore
+strengthens rather than weakens: the deficit is not caused by the filters being
+*untrained*, because training them does not help. At 8×8 input the data is
+already close to information-minimal, and any 2×2 projection — quantum or
+classical, tuned or random — discards more than it contributes.
+
+**A methodological correction worth recording.** An earlier run of this
+experiment reported a +1.4-point gain for the trained quantum filter, bringing
+it level with raw pixels. That result was wrong. The angle search had been run
+over the full dataset, and the final evaluation then used a fresh random split
+of that *same* dataset — so the angles had been selected using rows that later
+appeared in the test set. Re-running with a sealed 30% test partition that the
+search never touches reduced the gain from +1.4 points to +0.1. The inflated
+number is reported here rather than quietly discarded, because the difference
+between the two is precisely the difference between a false headline claim and
+the real finding.
+
+**On parameter efficiency, stated carefully.** The quantum filter produces the
+same 160-dimensional feature space from **8 parameters against the classical
+control's 40**. At the untrained baseline the two are at parity (91.7% vs 92.0%),
+so that 5× parameter economy is real and costs nothing. After training the
+comparison reverses — quantum 90.6% against classical 92.1% — so the honest
+summary is that the parameter economy holds at the untrained baseline and does
+not survive this training protocol. It should not be reported as "same accuracy
+with fewer parameters" without that qualification.
+
+![Variational training](../benchmarking/figures/variational_training.png)
 
 ---
 
@@ -290,10 +387,32 @@ Recorded explicitly rather than omitted:
 
 ---
 
-## 9. Figures — **[PENDING — Aug 12]**
+## 9. Figures
 
-Accuracy by tier; Grover CX scaling (log-log with fitted exponent); shot-noise
-curve; CER by tier.
+All figures are generated from the committed results files by
+`benchmarking/make_figures.py`, so they cannot drift out of step with the
+numbers in this report.
+
+**Feature extractors by quality tier** — the four methods separate only on the
+degraded tiers; on clean input every method saturates.
+
+![Accuracy by tier](../benchmarking/figures/accuracy_by_tier.png)
+
+**Grover oracle scaling** — measured CX cost plotted against linear and √N
+references. The measured slope sits *above* the linear reference, which is the
+central negative result of Track B.
+
+![Grover scaling](../benchmarking/figures/grover_scaling.png)
+
+**End-to-end error versus segmentation quality** — CER tracks the segmentation
+ratio, not character-classification accuracy, which is the evidence for the
+claim that the classical front end is the bottleneck.
+
+![CER by tier](../benchmarking/figures/cer_by_tier.png)
+
+**Shot-noise sensitivity** — accuracy against measurement budget per patch.
+
+![Shot noise](../benchmarking/figures/shot_noise.png)
 
 ---
 
@@ -315,6 +434,14 @@ curve; CER by tier.
    stored classical text.
 4. The dominant error source in the full pipeline is the classical segmentation
    front end, not either quantum stage.
+5. Training the quantum filter does not change (2), and in the reference run
+   degraded it by 1.1 points: the deficit is a property of small fixed 2×2
+   projections at 8×8 input, not of the filter being untrained. The quantum
+   filter reaches parity with the classical control at the untrained baseline
+   using 8 parameters against 40, but that economy does not survive training
+   under this protocol.
+6. The Week 1 prediction that the FRQI/NEQR qubit gap would widen with patch
+   size is refuted by measurement; it narrows, from 3.33× to 2.00×.
 
 The honest summary is that this work does not demonstrate quantum advantage for
 document intelligence, and it identifies specific, measured reasons why: random
@@ -334,6 +461,9 @@ python integration/pipeline.py --train
 python integration/pipeline.py --doc data/processed/clean_scan/doc_000.png --pattern 38
 python benchmarking/run_benchmark.py
 python track_b_search/oracle/comparator_oracle.py
+python track_a_vision/encoding/encoding_scaling.py
+python track_a_vision/quanvolutional/train_filter.py --budget 400 --subset 99999
+python benchmarking/make_figures.py
 ```
 
 Full benchmark runtime: ~35 s.
@@ -357,4 +487,4 @@ stated neutrally.
 
 ---
 
-*Last updated: August 10, 2026*
+*Last updated: August 13, 2026*
