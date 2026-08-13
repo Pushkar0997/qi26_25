@@ -1,0 +1,340 @@
+{
+  "seed": 26,
+  "charset": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:",
+  "crop_size": 8,
+  "font_print": "C:/Windows/Fonts/arial.ttf",
+  "font_hand": "C:/Windows/Fonts/timesi.ttf",
+  "platform": "win32",
+  "tiers": {
+    "clean_digital": {
+      "n_docs": 12,
+      "n_chars": 1207,
+      "docs": [
+        {
+          "file": "doc_000.png",
+          "doc_id": "QI87-12D0",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_001.png",
+          "doc_id": "QI83-1294",
+          "n_chars": 104
+        },
+        {
+          "file": "doc_002.png",
+          "doc_id": "QI15-C826",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_003.png",
+          "doc_id": "QI56-ED5E",
+          "n_chars": 100
+        },
+        {
+          "file": "doc_004.png",
+          "doc_id": "QI36-F185",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_005.png",
+          "doc_id": "QI75-88A9",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_006.png",
+          "doc_id": "QI99-D63B",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_007.png",
+          "doc_id": "QI45-9B24",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_008.png",
+          "doc_id": "QI47-5ED5",
+          "n_chars": 98
+        },
+        {
+          "file": "doc_009.png",
+          "doc_id": "QI35-BB8A",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_010.png",
+          "doc_id": "QI94-E662",
+          "n_chars": 104
+        },
+        {
+          "file": "doc_011.png",
+          "doc_id": "QI76-74C1",
+          "n_chars": 102
+        }
+      ]
+    },
+    "clean_scan": {
+      "n_docs": 12,
+      "n_chars": 1217,
+      "docs": [
+        {
+          "file": "doc_000.png",
+          "doc_id": "QI96-3898",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_001.png",
+          "doc_id": "QI32-C308",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_002.png",
+          "doc_id": "QI22-3D69",
+          "n_chars": 105
+        },
+        {
+          "file": "doc_003.png",
+          "doc_id": "QI16-39FD",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_004.png",
+          "doc_id": "QI56-71EC",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_005.png",
+          "doc_id": "QI78-57B7",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_006.png",
+          "doc_id": "QI44-42B3",
+          "n_chars": 105
+        },
+        {
+          "file": "doc_007.png",
+          "doc_id": "QI90-84A0",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_008.png",
+          "doc_id": "QI19-060F",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_009.png",
+          "doc_id": "QI17-7666",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_010.png",
+          "doc_id": "QI73-BEF6",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_011.png",
+          "doc_id": "QI24-3BCB",
+          "n_chars": 100
+        }
+      ]
+    },
+    "noisy_scan": {
+      "n_docs": 12,
+      "n_chars": 1200,
+      "docs": [
+        {
+          "file": "doc_000.png",
+          "doc_id": "QI98-0AD6",
+          "n_chars": 98
+        },
+        {
+          "file": "doc_001.png",
+          "doc_id": "QI28-7AE4",
+          "n_chars": 96
+        },
+        {
+          "file": "doc_002.png",
+          "doc_id": "QI88-3DB4",
+          "n_chars": 104
+        },
+        {
+          "file": "doc_003.png",
+          "doc_id": "QI82-6445",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_004.png",
+          "doc_id": "QI19-FB15",
+          "n_chars": 100
+        },
+        {
+          "file": "doc_005.png",
+          "doc_id": "QI89-12FE",
+          "n_chars": 98
+        },
+        {
+          "file": "doc_006.png",
+          "doc_id": "QI26-37A3",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_007.png",
+          "doc_id": "QI96-D3D6",
+          "n_chars": 96
+        },
+        {
+          "file": "doc_008.png",
+          "doc_id": "QI17-5AB4",
+          "n_chars": 104
+        },
+        {
+          "file": "doc_009.png",
+          "doc_id": "QI21-6A89",
+          "n_chars": 100
+        },
+        {
+          "file": "doc_010.png",
+          "doc_id": "QI97-269B",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_011.png",
+          "doc_id": "QI28-C51E",
+          "n_chars": 97
+        }
+      ]
+    },
+    "clear_handwriting": {
+      "n_docs": 12,
+      "n_chars": 1197,
+      "docs": [
+        {
+          "file": "doc_000.png",
+          "doc_id": "QI19-552F",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_001.png",
+          "doc_id": "QI49-66F4",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_002.png",
+          "doc_id": "QI80-ABC3",
+          "n_chars": 96
+        },
+        {
+          "file": "doc_003.png",
+          "doc_id": "QI16-0517",
+          "n_chars": 98
+        },
+        {
+          "file": "doc_004.png",
+          "doc_id": "QI79-82C2",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_005.png",
+          "doc_id": "QI44-B90C",
+          "n_chars": 104
+        },
+        {
+          "file": "doc_006.png",
+          "doc_id": "QI64-B28D",
+          "n_chars": 96
+        },
+        {
+          "file": "doc_007.png",
+          "doc_id": "QI63-39FC",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_008.png",
+          "doc_id": "QI78-B1CD",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_009.png",
+          "doc_id": "QI55-1EF3",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_010.png",
+          "doc_id": "QI71-F606",
+          "n_chars": 99
+        },
+        {
+          "file": "doc_011.png",
+          "doc_id": "QI84-1F08",
+          "n_chars": 105
+        }
+      ]
+    },
+    "degraded_handwriting": {
+      "n_docs": 12,
+      "n_chars": 1202,
+      "docs": [
+        {
+          "file": "doc_000.png",
+          "doc_id": "QI77-85AE",
+          "n_chars": 96
+        },
+        {
+          "file": "doc_001.png",
+          "doc_id": "QI78-6B1D",
+          "n_chars": 98
+        },
+        {
+          "file": "doc_002.png",
+          "doc_id": "QI33-1B94",
+          "n_chars": 102
+        },
+        {
+          "file": "doc_003.png",
+          "doc_id": "QI18-859F",
+          "n_chars": 105
+        },
+        {
+          "file": "doc_004.png",
+          "doc_id": "QI32-1C76",
+          "n_chars": 100
+        },
+        {
+          "file": "doc_005.png",
+          "doc_id": "QI94-AF39",
+          "n_chars": 100
+        },
+        {
+          "file": "doc_006.png",
+          "doc_id": "QI83-35E9",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_007.png",
+          "doc_id": "QI16-CCB0",
+          "n_chars": 105
+        },
+        {
+          "file": "doc_008.png",
+          "doc_id": "QI12-0949",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_009.png",
+          "doc_id": "QI67-2C9A",
+          "n_chars": 103
+        },
+        {
+          "file": "doc_010.png",
+          "doc_id": "QI98-5FAF",
+          "n_chars": 97
+        },
+        {
+          "file": "doc_011.png",
+          "doc_id": "QI98-84CA",
+          "n_chars": 96
+        }
+      ]
+    }
+  }
+}

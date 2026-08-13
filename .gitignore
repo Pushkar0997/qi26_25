@@ -4,13 +4,28 @@ __pycache__/
 .ipynb_checkpoints/
 venv/
 .venv/
+env/
 *.egg-info/
 
-# Data (keep large raw files out of git — track via README/download links instead)
+# Raw source documents — track provenance in data/README.md, not in git
 data/raw/*
 !data/raw/.gitkeep
+
+# Generated dataset (~8 MB, fully reproducible)
+#   python data/generate_dataset.py --docs-per-tier 12 --seed 26
 data/processed/**/*
 !data/processed/**/.gitkeep
+# ...but DO keep the manifest: it is small, and it records exactly which
+# documents and how many crops each tier produced, which the report cites.
+!data/processed/manifest.json
+
+# Trained OCR backend — build artifact, regenerate with:
+#   python integration/pipeline.py --train
+integration/ocr_backend.npz
+
+# Benchmark outputs ARE committed (results.json / results.md) — they are the
+# evidence behind the report and must be reviewable without running anything.
 
 # OS
 .DS_Store
+Thumbs.db

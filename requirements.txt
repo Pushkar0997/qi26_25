@@ -1,11 +1,28 @@
-qiskit>=1.0
-qiskit-aer
-pennylane
-numpy
-matplotlib
-opencv-python
-pillow
+# Verified working set — Aug 10, 2026.
+# Exact versions this pipeline was benchmarked on are noted per line; the
+# floors are what the code actually needs.
+
+# --- core quantum ---
+qiskit>=2.0,<3.0      # verified 2.5.1
+qiskit-aer>=0.15      # verified 0.17.2
+
+# --- numerics / imaging ---
+numpy>=1.26           # verified 2.4.4
+scipy>=1.11           # verified 1.17.1  (ndimage: page denoising, speckle removal)
+pillow>=10.0          # verified 12.1.1  (dataset rendering + crop resizing)
+
+# --- classical OCR backend ---
+scikit-learn>=1.3     # verified 1.8.0   (LogisticRegression, train_test_split)
+
+# --- notebooks + figures ---
 jupyter
-scipy
-pandas
-pylatexenc
+matplotlib>=3.7       # circuit diagrams, Aug 12 benchmark figures
+pylatexenc            # required for QuantumCircuit.draw('mpl') gate labels
+
+# --- named in the project brief, not currently imported by any code ---
+# Left commented deliberately: both are heavy installs and pennylane pins its
+# own numpy/scipy ranges, which can downgrade the versions above. Uncomment
+# only if a component is actually written against them.
+# pennylane
+# opencv-python
+# pandas
