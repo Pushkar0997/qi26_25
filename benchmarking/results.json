@@ -1,0 +1,252 @@
+{
+  "A": {
+    "clean_digital": {
+      "quanv (marginals)": {
+        "acc": 0.9934,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 1.0,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 1.0,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 1.0,
+        "dim": 64
+      }
+    },
+    "clean_scan": {
+      "quanv (marginals)": {
+        "acc": 0.9934,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 1.0,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 1.0,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 1.0,
+        "dim": 64
+      }
+    },
+    "noisy_scan": {
+      "quanv (marginals)": {
+        "acc": 0.93,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 0.9767,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 0.9767,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 0.9833,
+        "dim": 64
+      }
+    },
+    "clear_handwriting": {
+      "quanv (marginals)": {
+        "acc": 0.8767,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 0.9667,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 0.9633,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 0.9867,
+        "dim": 64
+      }
+    },
+    "degraded_handwriting": {
+      "quanv (marginals)": {
+        "acc": 0.6246,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 0.7575,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 0.7442,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 0.794,
+        "dim": 64
+      }
+    },
+    "ALL_TIERS": {
+      "quanv (marginals)": {
+        "acc": 0.8665,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 0.9223,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 0.919,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 0.9363,
+        "dim": 64
+      }
+    }
+  },
+  "B": {
+    "clean_digital": {
+      "cer_mean": 0.4293,
+      "cer_std": 0.0194,
+      "segmentation_recall_proxy": 0.95,
+      "n_docs": 8
+    },
+    "clean_scan": {
+      "cer_mean": 0.2966,
+      "cer_std": 0.0822,
+      "segmentation_recall_proxy": 0.93,
+      "n_docs": 8
+    },
+    "noisy_scan": {
+      "cer_mean": 0.8966,
+      "cer_std": 0.0304,
+      "segmentation_recall_proxy": 0.357,
+      "n_docs": 8
+    },
+    "clear_handwriting": {
+      "cer_mean": 0.745,
+      "cer_std": 0.0166,
+      "segmentation_recall_proxy": 0.694,
+      "n_docs": 8
+    },
+    "degraded_handwriting": {
+      "cer_mean": 0.9411,
+      "cer_std": 0.1036,
+      "segmentation_recall_proxy": 1.019,
+      "n_docs": 8
+    }
+  },
+  "C": {
+    "quanv_filter": {
+      "qubits": 4,
+      "depth": 10,
+      "cx": 8,
+      "circuits_per_8x8_char": 16
+    },
+    "grover_oracle_16char": {
+      "n_text": 16,
+      "n_pattern": 2,
+      "alphabet_bits": 5,
+      "qubits": 14,
+      "pos_qubits": 4,
+      "win_qubits": 10,
+      "depth": 6073,
+      "cx": 3272,
+      "total_gates": 7341
+    }
+  },
+  "D": {
+    "rows": [
+      {
+        "n_text": 8,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 13,
+        "pos_qubits": 3,
+        "win_qubits": 10,
+        "depth": 1857,
+        "cx": 1082,
+        "total_gates": 2340
+      },
+      {
+        "n_text": 12,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 14,
+        "pos_qubits": 4,
+        "win_qubits": 10,
+        "depth": 4583,
+        "cx": 2492,
+        "total_gates": 5615
+      },
+      {
+        "n_text": 16,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 14,
+        "pos_qubits": 4,
+        "win_qubits": 10,
+        "depth": 6383,
+        "cx": 3428,
+        "total_gates": 7680
+      },
+      {
+        "n_text": 24,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 15,
+        "pos_qubits": 5,
+        "win_qubits": 10,
+        "depth": 11445,
+        "cx": 6122,
+        "total_gates": 13606
+      },
+      {
+        "n_text": 32,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 15,
+        "pos_qubits": 5,
+        "win_qubits": 10,
+        "depth": 16159,
+        "cx": 8570,
+        "total_gates": 18933
+      },
+      {
+        "n_text": 48,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 16,
+        "pos_qubits": 6,
+        "win_qubits": 10,
+        "depth": 29664,
+        "cx": 15696,
+        "total_gates": 34413
+      },
+      {
+        "n_text": 64,
+        "n_pattern": 2,
+        "alphabet_bits": 5,
+        "qubits": 16,
+        "pos_qubits": 6,
+        "win_qubits": 10,
+        "depth": 39558,
+        "cx": 20904,
+        "total_gates": 45640
+      }
+    ],
+    "cx_exponent": 1.393
+  },
+  "E": {
+    "64": 0.7072,
+    "256": 0.8174,
+    "1024": 0.8519,
+    "4096": 0.8665,
+    "exact": 0.8665
+  }
+}
