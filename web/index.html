@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lean Quantum Document Pipeline — qi26_25</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a21; --line:#232a35; --ink:#e6e9ef;
+    --dim:#8b95a7; --acc:#4fd1c5; --acc2:#f6ad55; --bad:#fc8181; --good:#68d391;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  a{color:var(--acc)}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  header{border-bottom:1px solid var(--line);padding:56px 0 40px;
+         background:radial-gradient(900px 340px at 20% -10%,#1b2430,transparent)}
+  h1{margin:0 0 8px;font-size:30px;letter-spacing:-.4px}
+  .sub{color:var(--dim);max-width:70ch}
+  .tag{display:inline-block;font:12px var(--mono);color:var(--acc);
+       border:1px solid #2b6f6a;background:#12312f;border-radius:999px;
+       padding:3px 10px;margin:0 6px 6px 0}
+  h2{font-size:20px;margin:44px 0 6px;letter-spacing:-.2px}
+  h3{font-size:15px;margin:26px 0 6px;color:var(--dim);
+     text-transform:uppercase;letter-spacing:.9px}
+  .panel{background:var(--panel);border:1px solid var(--line);
+         border-radius:12px;padding:18px}
+  .muted{color:var(--dim);font-size:13.5px}
+  code,pre{font-family:var(--mono)}
+  pre{background:#0c0e12;border:1px solid var(--line);border-radius:8px;
+      padding:12px;overflow:auto;font-size:12.5px}
+
+  /* ---------- findings ---------- */
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-top:14px}
+  .card h4{margin:0 0 6px;font-size:14px}
+  .big{font:600 26px/1.1 var(--mono);color:var(--acc)}
+  .big.warn{color:var(--acc2)}
+
+  /* ---------- demo ---------- */
+  .demobar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{background:#1d2531;color:var(--ink);border:1px solid #2c3648;border-radius:8px;padding:9px 14px;
+         font-size:14px;cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+  button:disabled{opacity:.45;cursor:default}
+  button.primary{background:#12312f;border-color:#2b6f6a;color:var(--acc)}
+  input[type=text]{background:#0c0e12;border:1px solid var(--line);
+                   border-radius:8px;color:var(--ink);padding:9px 11px;
+                   font-family:var(--mono);width:110px}
+  .drop{border:1.5px dashed #2c3648;border-radius:12px;padding:26px;
+        text-align:center;color:var(--dim);cursor:pointer}
+  .drop.over{border-color:var(--acc);background:#12312f;color:var(--acc)}
+
+  /* stage rail */
+  .rail{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0}
+  .st{border:1px solid var(--line);border-radius:9px;padding:9px 10px;
+      background:#0c0e12;font-size:12px;color:var(--dim);position:relative}
+  .st .n{font:11px var(--mono);color:#4a5568}
+  .st.on{border-color:var(--acc);color:var(--ink);background:#10221f}
+  .st.done{border-color:#2b6f6a}
+  .st .q{position:absolute;top:7px;right:9px;font:10px var(--mono);color:var(--acc)}
+
+  .stagebox{border:1px solid var(--line);border-radius:12px;background:var(--panel);
+            padding:16px;margin-bottom:12px}
+  .stagebox h4{margin:0 0 4px;font-size:14px}
+  .stagebox .why{color:var(--dim);font-size:13px;margin:0 0 12px}
+  canvas{max-width:100%;border-radius:8px;background:#0c0e12;display:block}
+  .cropwrap{display:flex;flex-wrap:wrap;gap:5px;max-height:230px;overflow:auto}
+  .crop{text-align:center}
+  .crop canvas{width:34px;height:34px;image-rendering:pixelated;border:1px solid var(--line)}
+  .crop .lbl{font:11px var(--mono);color:var(--dim)}
+  .crop .lbl.lo{color:var(--acc2)}
+  .out{font-family:var(--mono);font-size:13px;white-space:pre-wrap;
+       background:#0c0e12;border:1px solid var(--line);border-radius:8px;padding:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim);font-weight:500}
+  .bar{height:9px;background:#1d2531;border-radius:5px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--acc)}
+  .hide{display:none}
+  footer{border-top:1px solid var(--line);margin-top:56px;padding:26px 0 60px;
+         color:var(--dim);font-size:13px}
+  .warnbox{border:1px solid #7a4a2a;background:#221a12;border-radius:9px;
+           padding:11px 13px;color:#f0c9a0;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Lean Quantum Document Pipeline</h1>
+    <p class="sub">A hybrid document-intelligence pipeline with two quantum stages —
+    a quanvolutional feature extractor and a Grover string-matching oracle —
+    benchmarked honestly against classical baselines. QIntern 2026 / QWorld.</p>
+    <div style="margin-top:12px">
+      <span class="tag">Qiskit</span><span class="tag">Grover comparator oracle</span>
+      <span class="tag">Quanvolutional layer</span><span class="tag">FRQI / NEQR</span>
+    </div>
+    <p class="muted" style="margin-top:14px">
+      <a href="https://github.com/Pushkar0997/qi26_25">Repository</a> ·
+      <a href="https://github.com/Pushkar0997/qi26_25/blob/main/docs/final_report.md">Full report</a>
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2>What was found</h2>
+  <p class="muted" style="max-width:74ch">The results are largely negative and are
+  reported as such. A tuned demonstration would have been easier to produce and
+  worth less.</p>
+
+  <div class="grid">
+    <div class="panel card">
+      <h4>Quantum features ≈ classical</h4>
+      <div class="big">92.2% <span style="color:var(--dim);font-size:15px">vs 91.9%</span></div>
+      <p class="muted">At matched dimensionality the quanvolutional layer ties a
+      classical convolution — and both lose to raw pixels (93.6%). Training the
+      filter does not close the gap.</p>
+    </div>
+    <div class="panel card">
+      <h4>Grover's √N does not survive</h4>
+      <div class="big warn">N<sup>1.39</sup></div>
+      <p class="muted">Measured CX cost per oracle call grows faster than linearly
+      in text length, because loading classical text into the circuit dominates.
+      The query advantage is real; the end-to-end speedup is not.</p>
+    </div>
+    <div class="panel card">
+      <h4>The bottleneck is classical</h4>
+      <div class="big">6.5%</div>
+      <p class="muted">Clean-document character error rate. Fixing a train/serve
+      skew cut it 6.6×, which was worth more than any quantum component — and it
+      was found because a <em>better</em> feature set produced <em>worse</em> output.</p>
+    </div>
+  </div>
+
+  <h2>Try it</h2>
+  <p class="muted" style="max-width:74ch">
+    Everything below runs in your browser. No image is uploaded anywhere.
+    The filter unitary and OCR weights are the exact trained artifacts from the
+    repository, and <code>web/verify_parity.py</code> checks stage by stage that
+    this page produces byte-identical output to the Python pipeline.
+  </p>
+
+  <div class="panel" style="margin-top:14px">
+    <div class="demobar">
+      <button id="btnSample" class="primary">Load sample document</button>
+      <label style="color:var(--dim);font-size:13px">search for
+        <input id="pattern" type="text" value="38" maxlength="4">
+      </label>
+      <button id="btnRun" disabled>Run pipeline</button>
+      <span id="timing" class="muted"></span>
+    </div>
+
+    <div id="drop" class="drop">
+      Drop a PNG here, or click to choose &mdash; a scan or photo of printed text works best
+      <input id="file" type="file" accept="image/*" class="hide">
+    </div>
+
+    <div class="rail" id="rail">
+      <div class="st" data-s="input"><div class="n">01</div>Input</div>
+      <div class="st" data-s="segment"><div class="n">02</div>Segmentation</div>
+      <div class="st" data-s="crops"><div class="n">03</div>Encoding<span class="q">Q</span></div>
+      <div class="st" data-s="classify"><div class="n">04</div>Decode</div>
+      <div class="st" data-s="grover"><div class="n">05</div>Grover<span class="q">Q</span></div>
+    </div>
+
+    <div id="stages"></div>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="panel">
+    <h3>Why no quantum simulator runs here</h3>
+    <p class="muted">Both quantum stages reduce to small dense linear algebra, so
+    the browser reproduces them exactly rather than approximating them.</p>
+    <p class="muted"><strong>Quanvolutional layer.</strong> The filter is a fixed
+    circuit, so it is one 16×16 unitary. The angle encoding produces a product
+    state, so a patch's statevector is a Kronecker product of four single-qubit
+    states and the layer is a matrix–vector product — precisely what Aer computes.</p>
+    <p class="muted"><strong>Grover search.</strong> The comparator oracle was
+    measured in Python to have <em>zero</em> uncomputation leakage: the window
+    register returns exactly to |0⟩, leaving the position register unentangled.
+    That measurement is what licenses simulating the position register alone
+    here. The reduced dynamics are exact, and the leakage check is the evidence.</p>
+    <p class="muted">The full circuit for a 16-character field is 14 qubits with
+    ~3,300 CX gates. The page reports those real costs even though it does not
+    execute the full circuit.</p>
+  </div>
+
+  <h2>Honest limitations</h2>
+  <div class="panel">
+    <ul class="muted" style="margin:0;padding-left:18px">
+      <li>The model was trained on <strong>synthetic</strong> documents (rendered,
+      then degraded under controlled parameters). Exact ground truth is what makes
+      character error rate computable at all, but real scans differ.</li>
+      <li>Its character set is <code>A–Z 0–9 - :</code> in a sans/serif face at one
+      size. Photos, unusual fonts, coloured backgrounds and handwriting will
+      degrade badly — that is a property of the training data, not a bug.</li>
+      <li>The Grover stage searches the hex-representable ID field only: a full
+      38-symbol alphabet needs 6 qubits per character, past what is simulable.</li>
+      <li>Segmentation is projection-profile based and fails on low-DPI scans
+      where glyphs merge (recovering ~36% of characters on the noisy tier).</li>
+    </ul>
+  </div>
+
+  <footer>
+    <div class="wrap" style="padding:0">
+      Built for QIntern 2026 / QWorld ·
+      <a href="https://github.com/Pushkar0997/qi26_25">github.com/Pushkar0997/qi26_25</a><br>
+      All figures and numbers reproduce from the repository; see the report's
+      Reproducing section.
+    </div>
+  </footer>
+</div>
+
+<script type="module">
+import { Pipeline } from './pipeline.js';
+
+const $ = s => document.querySelector(s);
+const stagesEl = $('#stages');
+let imgData = null, ready = false;
+
+function setStage(name, state){
+  document.querySelectorAll('.st').forEach(el=>{
+    if(el.dataset.s === name){ el.classList.remove('on','done'); el.classList.add(state); }
+  });
+}
+function resetRail(){ document.querySelectorAll('.st').forEach(el=>el.classList.remove('on','done')); }
+
+function box(title, why, bodyHtml){
+  const d = document.createElement('div');
+  d.className = 'stagebox';
+  d.innerHTML = `<h4>${title}</h4><p class="why">${why}</p>${bodyHtml}`;
+  stagesEl.appendChild(d);
+  return d;
+}
+
+Pipeline.load('./model.json').then(meta=>{
+  ready = true;
+  $('#btnRun').disabled = !imgData;
+}).catch(e=>{
+  stagesEl.innerHTML = `<div class="warnbox">Could not load model.json — ${e.message}.
+    If you are opening this file directly, serve it instead:
+    <code>python -m http.server</code> in the <code>web/</code> folder.</div>`;
+});
+
+/* ---------------- input handling ---------------- */
+function loadImageFromSrc(src){
+  const im = new Image();
+  im.crossOrigin = 'anonymous';
+  im.onload = ()=>{
+    const maxW = 900;
+    const sc = Math.min(1, maxW / im.width);
+    const c = document.createElement('canvas');
+    c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc);
+    const ctx = c.getContext('2d', { willReadFrequently:true });
+    ctx.drawImage(im, 0, 0, c.width, c.height);
+    imgData = ctx.getImageData(0,0,c.width,c.height);
+    $('#btnRun').disabled = !ready;
+    stagesEl.innerHTML = '';
+    resetRail();
+    box('Loaded', `${c.width} × ${c.height} px. Press <em>Run pipeline</em>.`, '')
+      .appendChild(c);
+    c.style.maxHeight = '260px'; c.style.objectFit = 'contain';
+  };
+  im.onerror = ()=>{ stagesEl.innerHTML =
+    `<div class="warnbox">Could not load that image.</div>`; };
+  im.src = src;
+}
+
+$('#drop').onclick = ()=> $('#file').click();
+$('#file').onchange = e => { const f = e.target.files[0]; if(f) readFile(f); };
+$('#drop').ondragover = e => { e.preventDefault(); $('#drop').classList.add('over'); };
+$('#drop').ondragleave = ()=> $('#drop').classList.remove('over');
+$('#drop').ondrop = e => {
+  e.preventDefault(); $('#drop').classList.remove('over');
+  const f = e.dataTransfer.files[0]; if(f) readFile(f);
+};
+function readFile(f){
+  const r = new FileReader();
+  r.onload = ()=> loadImageFromSrc(r.result);
+  r.readAsDataURL(f);
+}
+$('#btnSample').onclick = ()=> loadImageFromSrc('./sample_doc.png');
+
+/* ---------------- run ---------------- */
+$('#btnRun').onclick = async ()=>{
+  if(!imgData) return;
+  stagesEl.innerHTML = ''; resetRail();
+  $('#btnRun').disabled = true; $('#timing').textContent = 'running…';
+
+  const pattern = $('#pattern').value.trim().toUpperCase();
+
+  const res = await Pipeline.run(imgData, pattern, (stage, data)=>{
+    setStage(stage, 'on');
+    render(stage, data);
+    document.querySelectorAll('.st').forEach(el=>{
+      if(el.dataset.s === stage) return;
+      if(el.classList.contains('on')){ el.classList.remove('on'); el.classList.add('done'); }
+    });
+  });
+
+  setStage('grover','done');
+  $('#timing').textContent = `${res.ms.toFixed(0)} ms · ${res.boxes.length} characters`;
+  $('#btnRun').disabled = false;
+};
+
+/* ---------------- per-stage rendering ---------------- */
+function render(stage, d){
+  if(stage === 'input') return;
+
+  if(stage === 'segment'){
+    const c = document.createElement('canvas');
+    c.width = d.w; c.height = d.h;
+    const ctx = c.getContext('2d');
+    const im = ctx.createImageData(d.w, d.h);
+    for(let i=0;i<d.w*d.h;i++){
+      const v = d.ink[i] ? 20 : 245;
+      im.data[i*4]=v; im.data[i*4+1]=v; im.data[i*4+2]=v; im.data[i*4+3]=255;
+    }
+    ctx.putImageData(im,0,0);
+    ctx.strokeStyle = '#4fd1c5'; ctx.lineWidth = 1;
+    d.boxes.forEach(b=>ctx.strokeRect(b.x0+.5,b.y0+.5,b.x1-b.x0-1,b.y1-b.y0-1));
+    const el = box('02 · Segmentation <span class="muted">— classical</span>',
+      `Median filter, Otsu threshold, speckle removal by connected components,
+       then projection profiles split rows into lines and lines into characters.
+       Found <strong>${d.boxes.length}</strong> boxes.`, '');
+    c.style.maxHeight='300px'; c.style.objectFit='contain';
+    el.appendChild(c);
+    return;
+  }
+
+  if(stage === 'crops'){
+    const wrap = document.createElement('div');
+    wrap.className = 'cropwrap';
+    d.crops.slice(0,120).forEach(cr=>{
+      const holder = document.createElement('div'); holder.className='crop';
+      const c = document.createElement('canvas'); c.width=8;c.height=8;
+      const ctx=c.getContext('2d'); const im=ctx.createImageData(8,8);
+      for(let i=0;i<64;i++){ const v=Math.max(0,Math.min(255,cr[i]));
+        im.data[i*4]=v;im.data[i*4+1]=v;im.data[i*4+2]=v;im.data[i*4+3]=255; }
+      ctx.putImageData(im,0,0);
+      holder.appendChild(c); wrap.appendChild(holder);
+    });
+    const el = box('03 · Quantum encoding <span class="muted">— quanvolutional layer</span>',
+      `Each character is normalised to 8×8 and cut into sixteen 2×2 patches.
+       Every patch is angle-encoded onto 4 qubits, passed through the entangling
+       filter, and read out as 4 single-qubit marginals plus 6 ⟨Z<sub>i</sub>Z<sub>j</sub>⟩
+       correlations — 160 features per character.`, '');
+    el.appendChild(wrap);
+    return;
+  }
+
+  if(stage === 'features'){
+    const f = d.features[0];
+    if(!f) return;
+    const c = document.createElement('canvas');
+    const cols = 10, rows = 16;
+    c.width = cols*14; c.height = rows*14;
+    const ctx = c.getContext('2d');
+    for(let r=0;r<rows;r++) for(let q=0;q<cols;q++){
+      const v = f[r*cols+q];
+      const t = Math.max(0, Math.min(1, (v+1)/2));
+      ctx.fillStyle = `hsl(${180+120*t},60%,${18+46*t}%)`;
+      ctx.fillRect(q*14, r*14, 13, 13);
+    }
+    const el = box('Feature map <span class="muted">— first character</span>',
+      `Rows are the 16 patches, columns the 10 measured quantities. This is the
+       quantum stage's entire output for one character.`, '');
+    el.appendChild(c);
+    return;
+  }
+
+  if(stage === 'classify'){
+    const conf = d.predictions.map(p=>p.confidence);
+    const mean = conf.reduce((a,b)=>a+b,0)/Math.max(1,conf.length);
+    const low = conf.filter(c=>c<0.5).length;
+    box('04 · Decoded text <span class="muted">— classical head</span>',
+      `A logistic-regression head maps the 160 quantum features to characters.
+       Mean confidence <strong>${(mean*100).toFixed(0)}%</strong>;
+       ${low} character${low===1?'':'s'} below 50%.`,
+      `<div class="out">${escapeHtml(d.text) || '<span class="muted">nothing decoded</span>'}</div>`);
+    return;
+  }
+
+  if(stage === 'grover'){
+    const g = d.grover;
+    if(!g){ box('05 · Grover search','No pattern given.',''); return; }
+    if(g.status !== 'ok'){
+      box('05 · Grover search <span class="muted">— quantum</span>',
+        `Searchable ID field recovered as <code>${escapeHtml(d.field||'(none)')}</code>.`,
+        `<div class="warnbox">${g.status === 'pattern absent'
+          ? 'That pattern does not occur in the recovered field, so there is nothing to amplify. Try a pair of characters visible in the decoded ID.'
+          : escapeHtml(g.status)}</div>`);
+      return;
+    }
+    // The position register holds 2^nPos states, but only nCand of them are
+    // real start positions. When the text length is not a power of two the
+    // remainder are unreachable, and showing them unlabelled implies the search
+    // is considering candidates that do not exist.
+    const rows = g.probs.map((p,i)=>{
+      const oob = i >= g.nCand;
+      const lbl = oob ? '<span class="muted">out of range</span>'
+                : g.truth.includes(i) ? '<span style="color:var(--good)">match</span>' : '';
+      return `<tr${oob?' style="opacity:.42"':''}>
+        <td><code>${i}</code></td><td>${lbl}</td>
+        <td><div class="bar"><i style="width:${(p*100).toFixed(1)}%;${oob?'background:#4a5568':''}"></i></div></td>
+        <td style="text-align:right"><code>${(p*100).toFixed(1)}%</code></td></tr>`;
+    }).join('');
+    const padNote = g.nCand < g.probs.length
+      ? ` Only positions 0&ndash;${g.nCand-1} are real start positions; a
+          ${g.nPos}-qubit register addresses ${g.probs.length}, so the remainder
+          are unreachable padding.` : '';
+    const multi = g.truth.length > 1
+      ? ` <strong>${g.truth.length} occurrences</strong> of the pattern are
+          present, so amplitude is shared between them &mdash; each peaks near
+          ${(100/g.truth.length*0.95).toFixed(0)}% rather than one reaching ~95%.` : '';
+    box('05 · Grover search <span class="muted">— quantum</span>',
+      `Searching <code>${escapeHtml(g.searchable)}</code> for
+       <code>${escapeHtml(g.pattern)}</code> using ${g.iterations} Grover
+       iteration${g.iterations===1?'':'s'} over ${g.nPos} position qubits.
+       The full circuit including the comparator window is
+       <strong>${g.qubitsFullCircuit} qubits</strong>.${padNote}${multi}`,
+      `<table><thead><tr><th>position</th><th></th><th>amplitude²</th><th></th></tr></thead>
+       <tbody>${rows}</tbody></table>
+       <p class="muted" style="margin:10px 0 0">Measured position
+       <strong>${g.best}</strong> at ${(g.confidence*100).toFixed(1)}% —
+       ${g.correct?'<span style="color:var(--good)">correct</span>'
+                  :'<span style="color:var(--bad)">incorrect</span>'}.</p>`);
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
