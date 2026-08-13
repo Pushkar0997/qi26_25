@@ -103,7 +103,7 @@ def experiment_b(max_docs=8):
 
     rows = {}
     for tier in TIERS:
-        cers, seg_ratio = [], []
+        cers, seg_ratio, id_hits = [], [], []
         for f in sorted((DATA / tier).glob("doc_*.png"))[:max_docs]:
             meta = json.loads(f.with_suffix(".json").read_text())
             from PIL import Image
@@ -114,15 +114,25 @@ def experiment_b(max_docs=8):
             text = P.assemble_text(boxes, chars)
             cers.append(P.cer(text, meta["text"]))
             seg_ratio.append(len(boxes) / max(1, len(meta["char_labels"])))
+
+            # Task-level success: was the document's identifier recovered
+            # exactly? CER measures average character quality, but the actual
+            # job here is retrieving a specific field, and a single wrong
+            # character makes the ID useless. Reporting both separates
+            # "mostly readable" from "actually usable".
+            true_hex = "".join(c for c in meta.get("doc_id", "").upper()
+                               if c in "0123456789ABCDEF")
+            id_hits.append(1.0 if P._locate_id_field(text) == true_hex else 0.0)
         rows[tier] = {
             "cer_mean": round(float(np.mean(cers)), 4),
             "cer_std": round(float(np.std(cers)), 4),
             "segmentation_recall_proxy": round(float(np.mean(seg_ratio)), 3),
+            "id_exact_match": round(float(np.mean(id_hits)), 3),
             "n_docs": len(cers),
         }
-        print("  {:22s} CER={:.1%} +/- {:.1%}   seg_ratio={:.2f}".format(
+        print("  {:22s} CER={:.1%} +/- {:.1%}   seg={:.2f}   ID exact={:.0%}".format(
             tier, rows[tier]["cer_mean"], rows[tier]["cer_std"],
-            rows[tier]["segmentation_recall_proxy"]))
+            rows[tier]["segmentation_recall_proxy"], rows[tier]["id_exact_match"]))
     return rows
 
 
@@ -209,10 +219,12 @@ def write_markdown(results, path):
             "{:.1%} (d={})".format(row[n]["acc"], row[n]["dim"]) for n in names) + " |")
 
     L += ["", "## B. End-to-end character error rate", "",
-          "| Tier | CER | std | segmentation ratio |", "|---|---|---|---|"]
+          "| Tier | CER | std | segmentation ratio | document ID exact |",
+          "|---|---|---|---|---|"]
     for tier, r in results["B"].items():
-        L.append("| {} | {:.1%} | {:.1%} | {:.2f} |".format(
-            tier, r["cer_mean"], r["cer_std"], r["segmentation_recall_proxy"]))
+        L.append("| {} | {:.1%} | {:.1%} | {:.2f} | {:.0%} |".format(
+            tier, r["cer_mean"], r["cer_std"], r["segmentation_recall_proxy"],
+            r["id_exact_match"]))
 
     L += ["", "## C. Quantum resource cost", "", "```",
           json.dumps(results["C"], indent=2), "```"]
