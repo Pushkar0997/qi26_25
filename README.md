@@ -38,9 +38,26 @@ The results are largely negative, and deliberately reported as such:
   measured exponent of **1.39** in text length, so the √N query advantage does
   not survive data loading for stored classical text.
 - The pipeline's dominant error source is the **classical segmentation front
-  end**, not either quantum stage.
+  end**, not either quantum stage. Clean-document CER is 6.5-8.8%, and **100% of
+  clean digital documents have their identifier recovered exactly** end-to-end
+  through both quantum stages (50% on clean scans, 0% on degraded input).
+- The largest single improvement came from fixing a **train/serve skew** (crops
+  cut from ground-truth bounds in training vs segmentation bounds at inference),
+  which cut clean-document CER 6.6x. It was found because a *better* feature set
+  produced *worse* end-to-end output - isolated-character accuracy turned out to
+  be a misleading proxy for pipeline quality.
 - The Week 1 prediction that the FRQI/NEQR qubit gap widens with patch size is
   **refuted**: it narrows, 3.33x -> 2.00x.
+
+## Live demo
+
+**https://pushkar0997.github.io/qi26_25/** — upload a document image and watch
+each pipeline stage run in your browser. Nothing is uploaded to a server.
+
+The demo is not a re-implementation: it loads the exact trained weights and
+filter unitary from this repo, and  asserts stage-by-stage
+that it produces byte-identical output to the Python pipeline (features agree to
+5.6e-16; decoded text is identical).
 
 ## Quick start
 

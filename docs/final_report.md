@@ -269,22 +269,104 @@ a substantial hardware cost and belongs in any honest resource accounting.
 
 ## 6. End-to-end results
 
-| Tier | CER | Segmentation ratio |
-|---|---|---|
-| clean_digital | 42.9% | 0.95 |
-| clean_scan | 29.7% | 0.93 |
-| clear_handwriting | 74.5% | 0.69 |
-| noisy_scan | 89.7% | 0.36 |
-| degraded_handwriting | 94.1% | 1.02 |
+| Tier | CER | Segmentation ratio | Document ID recovered exactly |
+|---|---|---|---|
+| clean_digital | 6.5% | 0.95 | **100%** |
+| clean_scan | 8.8% | 0.93 | 50% |
+| clear_handwriting | 52.2% | 0.69 | 0% |
+| noisy_scan | 78.5% | 0.36 | 0% |
+| degraded_handwriting | 88.3% | 1.02 | 0% |
 
-**Error decomposition.** On clean tiers isolated character accuracy is ~99% but
-end-to-end CER is 30–43%. The gap is almost entirely front end, not
-classification: segmentation recovers ~93–95% of characters, and the remaining
-error is word-spacing reconstruction — note that `clean_digital` scores *worse*
-than `clean_scan` (42.9% vs 29.7%) despite cleaner pixels, which is only
-explicable as a spacing-reconstruction artifact, since its per-character
-accuracy is identical at 99.3%. **The classical front end, not the quantum
-stage, is the accuracy bottleneck on clean documents.**
+**Why the last column is the one that matters.** CER measures average character
+quality, but the pipeline's actual job is retrieving a specific field, and a
+single wrong character makes an identifier useless. The two metrics come apart
+sharply: `clean_scan` reads at 8.8% CER — visually almost clean — yet only half
+its documents yield a usable ID, because the errors that remain land inside the
+identifier as often as anywhere else. Averaged character accuracy flatters a
+system that fails the task half the time.
+
+End to end, through both quantum stages, **every clean digital document had its
+identifier recovered exactly**. On degraded scans the rate is zero. That is the
+honest operating envelope: this pipeline is usable on clean digital input and
+not usable on degraded scans, and the CER column alone would not have made the
+boundary visible.
+
+### 6.1 Train/serve skew — the single largest error source found
+
+An earlier version of these results reported 42.9% CER on `clean_digital`. The
+cause was a data-plumbing defect rather than anything in the model, and finding
+it produced the largest single improvement in the project.
+
+The defect: training crops were cut from the exact glyph bounds recorded during
+dataset generation, but at inference the crops come from projection
+segmentation. Those are measurably different distributions — on `clean_scan`,
+ground-truth boxes have median size 16×19 px while segmented boxes have median
+12×15 px. The classifier was trained on one distribution and asked to predict on
+another.
+
+It was detected by an inversion that should not otherwise be possible. Switching
+the feature stage from the 64-dim marginal readout to the 160-dim +ZZ readout
+raised isolated-character accuracy (§5), yet made end-to-end CER *worse*. A
+strictly better feature set producing strictly worse output is a signal that the
+two measurements are not sampling the same input distribution. The
+higher-capacity features fit the training crop distribution more tightly, so
+they transferred less well across the skew.
+
+The fix is to build training crops by running the real segmentation path over
+the training pages and labelling each detected box from ground truth by overlap
+(`load_training_data_segmented`, overlap threshold 0.55; ambiguous detections
+are dropped rather than guessed). Effect:
+
+| Tier | CER before | CER after | Reduction |
+|---|---|---|---|
+| clean_digital | 42.9% | **6.5%** | 6.6× |
+| clean_scan | 29.7% | **8.8%** | 3.4× |
+| clear_handwriting | 74.5% | **52.2%** | 1.4× |
+| noisy_scan | 89.7% | **78.5%** | 1.1× |
+| degraded_handwriting | 94.1% | **88.3%** | 1.1× |
+
+**A caution about the isolated-accuracy figure.** Training on segmented crops
+*lowers* reported held-out character accuracy from 92.6% to 67.7%. This is not a
+regression: the two numbers are measured on different crop distributions, and
+the 67.7% is measured on the harder, realistic one. The comparison to draw is
+that a model scoring 92.6% on clean bounds produced 42.9% document CER, while a
+model scoring 67.7% on realistic bounds produced 6.5%.
+
+**This is the most transferable finding in the project: isolated-character
+accuracy was an actively misleading proxy for end-to-end accuracy here, and
+optimising it drove the pipeline in the wrong direction.** Any comparison of
+feature extractors on pre-cut crops — including §5 of this report — measures
+something narrower than pipeline quality.
+
+### 6.2 Identifier extraction
+
+The field handed to the Grover stage is chosen by layout, not by keyword: the
+label itself is OCR output and comes back as things like `OOCUMENT IO:`, so
+matching on it is unreliable. Candidate tokens are scored by length, modulated
+by digit density, with zero-digit tokens rejected.
+
+Both halves of that rule were forced by observed failures. Scoring per *line*
+rather than per token meant that when OCR dropped the colon in
+`DOCUMENT ID: QI96-3898`, the D, C and E of the word "DOCUMENT" were harvested
+as hex digits and the field came out as `DCED963898` — every position the search
+reported was shifted by six. Scoring by digit density *alone* then ranked a
+short all-numeric field (`REF 7128`) above a longer alphanumeric identifier
+(`QI87-12D0` → `8712D0`), so the pipeline confidently searched the reference
+number instead of the document ID. Neither failure is visible unless the
+extracted field is checked against ground truth, which is what the exact-match
+column in §6.1 now does.
+
+When no token qualifies, the extractor returns nothing rather than a
+best-effort guess. On the noisy tier that is what happens: refusing to answer is
+preferable to emitting a plausible-looking identifier that is wrong.
+
+### 6.3 Remaining error
+
+With the skew corrected, clean-tier CER of 6.5–8.8% against segmentation
+recovering 93–95% of characters means the residual error is dominated by
+missed/merged glyphs and word-spacing reconstruction rather than by
+classification. **The classical front end, not the quantum stage, remains the
+accuracy bottleneck on clean documents.**
 
 On `noisy_scan` the pipeline degrades sharply (ratio 0.36): 45% downsampling
 plus blur fuses adjacent glyphs, and projection-profile segmentation cannot
@@ -433,7 +515,13 @@ claim that the classical front end is the bottleneck.
    the √N query advantage does not translate into an end-to-end speedup for
    stored classical text.
 4. The dominant error source in the full pipeline is the classical segmentation
-   front end, not either quantum stage.
+   front end, not either quantum stage. Clean-document CER is 6.5–8.8%, and
+   100% of clean digital documents have their identifier recovered exactly
+   end-to-end — falling to 50% on clean scans and 0% on degraded input, which
+   is the honest operating envelope.
+   The largest single improvement in the project came from correcting a
+   train/serve skew (§6.1), not from any modelling change — and it was found
+   only because a better feature set produced worse end-to-end output.
 5. Training the quantum filter does not change (2), and in the reference run
    degraded it by 1.1 points: the deficit is a property of small fixed 2×2
    projections at 8×8 input, not of the filter being untrained. The quantum
@@ -442,6 +530,9 @@ claim that the classical front end is the bottleneck.
    under this protocol.
 6. The Week 1 prediction that the FRQI/NEQR qubit gap would widen with patch
    size is refuted by measurement; it narrows, from 3.33× to 2.00×.
+7. Isolated-character accuracy proved a misleading proxy for end-to-end
+   accuracy: the configuration scoring 92.6% on pre-cut crops produced 42.9%
+   document CER, while the configuration scoring 67.7% produced 6.5%.
 
 The honest summary is that this work does not demonstrate quantum advantage for
 document intelligence, and it identifies specific, measured reasons why: random
