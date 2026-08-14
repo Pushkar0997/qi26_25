@@ -11,13 +11,18 @@ env/
 data/raw/*
 !data/raw/.gitkeep
 
-# Generated dataset (~8 MB, fully reproducible)
+# Generated dataset (~8 MB) — COMMITTED DELIBERATELY, not ignored.
+#
+# It regenerates from seed 26, so ignoring it looks tempting. But generation
+# renders text with whatever font the machine provides (Arial on Windows,
+# Liberation or DejaVu on Linux and Colab), and glyph outlines differ enough to
+# change segmentation. On Colab, thinner strokes split characters in half:
+# clean_digital CER went from 6.5% to 63.7% purely from the rendering.
+#
+# Committing the data makes every machine see identical crops, so the report,
+# the notebooks and web/model.json agree everywhere. Regenerate only if you
+# intend to change the dataset:
 #   python data/generate_dataset.py --docs-per-tier 12 --seed 26
-data/processed/**/*
-!data/processed/**/.gitkeep
-# ...but DO keep the manifest: it is small, and it records exactly which
-# documents and how many crops each tier produced, which the report cites.
-!data/processed/manifest.json
 
 # Trained OCR backend — build artifact, regenerate with:
 #   python integration/pipeline.py --train
