@@ -2,7 +2,10 @@
 
 **QIntern 2026 | QWorld**
 **Mentor:** Potluri Krishna Priyatham
-**Team:** Pushkar Kumar (orchestration, integration, benchmarking), Klasik Taidi (Track A), Hoang Dinh Duy Anh (Track B)
+**Author:** Pushkar Kumar — all commits in this repository are single-authored.
+**Originally scoped for three:** Klasik Taidi (Track A) and Hoang Dinh Duy Anh
+(Track B) were assigned tracks that were not taken up; see Section 11 of the
+report.
 
 ---
 
@@ -37,6 +40,11 @@ The results are largely negative, and deliberately reported as such:
 - Grover string matching works correctly, but oracle CX cost grows with a
   measured exponent of **1.39** in text length, so the √N query advantage does
   not survive data loading for stored classical text.
+- Measured over 30 splits, quantum-vs-classical parity is a **null result**
+  (p=0.30, 14/30 splits won) while the raw-pixel lead is real (p=5e-12, 30/30).
+- Against **Tesseract** on the same images, this pipeline is 3-4x worse on clean
+  input (6.6% vs 2.0% character error). It is not competitive with mature
+  classical OCR; the contribution is the measured characterisation of why.
 - The pipeline's dominant error source is the **classical segmentation front
   end**, not either quantum stage. Clean-document CER is 6.5-8.8%, and **100% of
   clean digital documents have their identifier recovered exactly** end-to-end
@@ -78,18 +86,38 @@ Total 162 cells, all executed with outputs saved.
 
 ## Quick start
 
+The dataset and the trained model are committed, so nothing needs to be
+generated before verifying any result:
+
 ```bash
+git clone https://github.com/Pushkar0997/qi26_25.git
+cd qi26_25
 python -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-python data/generate_dataset.py --docs-per-tier 12 --seed 26   # ~8MB, gitignored
-python integration/pipeline.py --train                          # trains OCR backend
-python integration/pipeline.py --doc data/processed/clean_scan/doc_000.png --pattern 38
-python benchmarking/run_benchmark.py                            # all results, ~35s
+python benchmarking/run_benchmark.py     # all reported results, ~30s
+python web/verify_parity.py              # confirms the demo matches Python
+python benchmarking/seed_sweep.py        # significance over 30 splits
 ```
 
-Full reproduction sequence including the variational and encoding experiments is
-in Section 11 of `docs/final_report.md`.
+Run one document end to end:
+
+```bash
+python integration/pipeline.py --doc data/processed/clean_scan/doc_000.png --pattern 38
+```
+
+**Do not regenerate the dataset unless you intend to change it.** Generation
+renders text with whatever fonts the machine provides, and different fonts
+change segmentation: on a machine with thinner glyph rendering, clean-document
+character error rose from 6.5% to 63.7% in testing. The generator refuses to
+overwrite committed data without `--force` for this reason. Regenerating also
+requires retraining and re-exporting:
+
+```bash
+python data/generate_dataset.py --docs-per-tier 12 --seed 26 --force
+python integration/pipeline.py --train
+python web/export_model.py
+```
 
 ## Layout
 
@@ -107,13 +135,36 @@ docs/final_report.md                         the report
 
 ## Notes on reproducibility
 
-- The dataset (~8 MB) and trained backend are gitignored and regenerable; only
-  `manifest.json` is committed, recording seed, charset, fonts and platform.
-- Font rendering differs between operating systems, which shifts absolute
-  accuracy by a fraction of a percent. Comparative conclusions were verified
-  across two platforms and are unchanged.
-- Figures are generated from `benchmarking/*.json`, so they cannot disagree with
-  the reported numbers.
+- The dataset (~8 MB) and the trained backend (20 KB) **are committed**, so a
+  fresh clone reproduces every reported number without generating or training
+  anything. They were previously gitignored as derived data; that was wrong,
+  because generation depends on machine-installed fonts and training is not
+  bit-reproducible across BLAS builds.
+- `data/processed/manifest.json` records the seed, charset, fonts and platform
+  used for the reported figures.
+- Figures are generated from the committed results files, so they cannot
+  disagree with the tables in the report.
+- Continuous integration runs the benchmark, the Grover oracle self-test and the
+  browser-parity check on every push.
+
+## Limitations
+
+Stated here rather than only in the report, because they bound what the results
+mean:
+
+- **Synthetic data.** 60 rendered documents, one font per tier. Exact ground
+  truth is what makes character error rate computable at all, but real scans
+  differ.
+- **The handwriting tiers are a proxy**, not handwriting: an italic serif face
+  with per-glyph position, rotation and scale jitter. Real handwritten data
+  (IAM database) is the correct extension.
+- **Small scale.** 6,023 characters, 8x8 crops, a 36-class charset and a 4-qubit
+  filter. Conclusions about quanvolutional layers are conclusions about this
+  regime, not about the approach in general.
+- **Three of five tiers fail.** Clean digital and clean scan work; noisy scans
+  and both handwriting tiers have character error rates of 52-88% and recover
+  no identifiers. The pipeline is usable on clean digital input and not usable
+  on degraded input.
 
 ---
 *Last updated: August 14, 2026*

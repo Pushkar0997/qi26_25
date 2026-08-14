@@ -221,7 +221,35 @@ win is indistinguishable from simply granting one method a wider representation.
 | degraded_handwriting | 62.5% | 75.7% | 74.4% | 79.4% |
 | **All tiers** | **86.7%** | **92.2%** | **91.9%** | **93.6%** |
 
-### 5.1 Interpretation
+### 5.1 Significance
+
+A single train/test split gives point estimates but cannot distinguish a real
+difference from split-to-split noise. Repeating over 30 splits, with every
+extractor scored on the same splits so the comparison is paired
+(`benchmarking/seed_sweep.py`):
+
+| Extractor | Mean | Std | 95% interval |
+|---|---|---|---|
+| quanv (marginals) | 87.1% | 0.7 | [85.4, 88.0] |
+| quanv (+ZZ) | 92.8% | 0.7 | [91.5, 94.0] |
+| classical conv | 92.9% | 0.6 | [91.8, 93.9] |
+| raw pixels | **94.1%** | 0.6 | [92.7, 95.0] |
+
+| Comparison | Mean difference | p | Splits won | Verdict |
+|---|---|---|---|---|
+| quanv (+ZZ) − classical conv | −0.10 pt | 0.30 | 14 / 30 | not distinguishable from noise |
+| raw pixels − quanv (+ZZ) | +1.24 pt | 5×10⁻¹² | 30 / 30 | significant |
+| raw pixels − classical conv | +1.14 pt | 2×10⁻¹⁴ | 30 / 30 | significant |
+| quanv (+ZZ) − quanv (marginals) | +5.74 pt | 4×10⁻²⁸ | 30 / 30 | significant |
+
+This separates two claims that the single-split table presents identically. The
+quantum-versus-classical gap is noise: the quantum layer wins 14 splits out of
+30, which is what a coin flip looks like. The raw-pixel lead is not: it holds in
+every one of 30 splits. The report's two central conclusions — parity with the
+classical control, and both losing to raw pixels — therefore rest on
+measurements of different strength, and only the second is a real effect.
+
+### 5.2 Interpretation
 
 **The quantum feature layer does not beat the classical baselines, and we are
 not going to present it as if it does.**
@@ -252,7 +280,7 @@ The open question this leaves is whether *training* the filter changes the
 picture, which is exactly what the brief's "variational quantum circuit" asks
 for. See Section 7.
 
-### 5.2 Shot-noise sensitivity
+### 5.3 Shot-noise sensitivity
 
 Exact statevector results are only achievable in simulation; hardware would
 sample. Accuracy against shot budget:
@@ -372,7 +400,45 @@ When no token qualifies, the extractor returns nothing rather than a
 best-effort guess. On the noisy tier that is what happens: refusing to answer is
 preferable to emitting a plausible-looking identifier that is wrong.
 
-### 6.3 Remaining error
+### 6.3 An external baseline
+
+Sections 5 and 6 compare feature maps that all share this project's segmentation
+front end and classifier. That answers "which feature map works best inside this
+pipeline?" but leaves the pipeline itself unanchored: a character error rate of
+6.5% means little without a reference point.
+
+Tesseract is the obvious reference — a mature open-source engine in development
+since 1985 — and it was run on the same document images, scored with the same
+error function (`benchmarking/tesseract_baseline.py`):
+
+| Tier | This pipeline CER | Tesseract CER | This pipeline ID | Tesseract ID |
+|---|---|---|---|---|
+| clean_digital | 6.6% | **2.0%** | **100%** | 92% |
+| clean_scan | 8.5% | **2.0%** | 58% | **75%** |
+| noisy_scan | **79.5%** | 100.0% | 0% | 0% |
+| clear_handwriting | 51.8% | **19.8%** | 0% | **17%** |
+| degraded_handwriting | **85.7%** | 100.0% | 0% | 0% |
+
+**Tesseract is better on clean and moderately degraded input**, by a factor of
+three to four on character error rate. That is the expected result and it is
+reported plainly: forty years of engineering on a task-specific problem beats a
+4-qubit filter over 8×8 crops, and nothing in this project suggests otherwise.
+
+Two details complicate the picture rather than rescuing it. On `clean_digital`
+this pipeline recovers the document identifier in every case against Tesseract's
+92%, because the identifier here is a fixed-format field and a constrained
+36-class charset cannot emit the out-of-charset characters Tesseract sometimes
+produces. And on the two most degraded tiers Tesseract returns essentially
+nothing (100% error), where this pipeline still recovers roughly one character
+in five — an artefact of Tesseract's page-analysis stage rejecting input it
+judges unreadable, rather than evidence of a better method.
+
+The comparison is not controlled: Tesseract brings its own segmentation,
+language model and training corpus. It is included because the first question a
+sceptical reader asks is how the pipeline compares to an ordinary classical
+tool, and the answer belongs in the report whether or not it flatters the work.
+
+### 6.4 Remaining error
 
 With the skew corrected, clean-tier CER of 6.5–8.8% against segmentation
 recovering 93–95% of characters means the residual error is dominated by
@@ -477,7 +543,13 @@ Recorded explicitly rather than omitted:
 | 200-document dataset | Cut to 60 synthetic | Labelling scraped documents in the time available was not possible; without labels CER is uncomputable |
 | Real handwriting samples | Proxy used | Font-plus-jitter stands in; IAM DB named as correct extension |
 | Week 5: quantum string alignment / OCR noise cleaning | Not attempted | Depends on a high-accuracy OCR stage that does not exist; building it would have produced a broken component, not a result |
-| LLM baseline | Cut | No budget/time; the classical-OCR control is retained and is the more informative comparison |
+| LLM baseline | Cut | No budget or time available |
+
+**Scale.** 6,023 characters, 8×8 crops, a 36-class charset, a 4-qubit filter and
+60 synthetic documents rendered with one font per tier. Every conclusion here is
+a conclusion about that regime. Whether quanvolutional layers behave the same
+way at larger patch sizes, wider alphabets or on real scans is untested, and the
+measurements in this report do not license extrapolating to them.
 
 ---
 
@@ -542,7 +614,15 @@ claim that the classical front end is the bottleneck.
    under this protocol.
 6. The Week 1 prediction that the FRQI/NEQR qubit gap would widen with patch
    size is refuted by measurement; it narrows, from 3.33× to 2.00×.
-7. Isolated-character accuracy proved a misleading proxy for end-to-end
+7. Measured over 30 splits, the quantum-versus-classical parity is a null
+   result (p = 0.30, 14 splits won of 30) while the raw-pixel lead is not
+   (p = 5×10⁻¹², 30 of 30). The two central comparisons differ in strength and
+   only the second is a real effect.
+8. Against Tesseract on the same images, this pipeline is three to four times
+   worse on clean input. It is not competitive with mature classical OCR, and
+   the value of the work is in the measured characterisation of why, not in the
+   pipeline as a product.
+9. Isolated-character accuracy proved a misleading proxy for end-to-end
    accuracy: the configuration scoring 92.6% on pre-cut crops produced 42.9%
    document CER, while the configuration scoring 67.7% produced 6.5%.
 

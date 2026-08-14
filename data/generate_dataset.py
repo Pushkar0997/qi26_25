@@ -372,7 +372,28 @@ def main():
                     help="override the printed-tier font (path or system name)")
     ap.add_argument("--font-hand", type=str, default=None,
                     help="override the handwriting-proxy font")
+    ap.add_argument("--force", action="store_true",
+                    help="overwrite an existing committed dataset")
     args = ap.parse_args()
+
+    # The dataset in data/processed is committed to the repository, and every
+    # reported number depends on it. Regenerating on a machine with different
+    # fonts produces different crops: in testing, clean-document character error
+    # rose from 6.5% to 63.7% purely from thinner glyph rendering. Overwriting
+    # it therefore has to be deliberate, because the failure is silent - the
+    # script succeeds and every downstream number quietly shifts.
+    existing = Path(args.out) / "clean_digital" / "chars.npz"
+    if existing.exists() and not args.force:
+        raise SystemExit(
+            "\nA dataset already exists at {}.\n\n"
+            "It is committed to the repository and the reported results depend\n"
+            "on it. Regenerating here would render text with this machine's\n"
+            "fonts, which changes segmentation and shifts every downstream\n"
+            "number.\n\n"
+            "If that is what you want:\n"
+            "    python data/generate_dataset.py --docs-per-tier 12 --seed 26 --force\n"
+            "    python integration/pipeline.py --train\n"
+            "    python web/export_model.py\n".format(args.out))
 
     font_print = args.font_print or resolve_font(FONT_PRINT_CANDIDATES, "print")
     font_hand = args.font_hand or resolve_font(FONT_HAND_CANDIDATES, "hand")

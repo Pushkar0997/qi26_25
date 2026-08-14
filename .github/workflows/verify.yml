@@ -1,0 +1,100 @@
+# Runs the project's own verification harnesses on every push.
+#
+# The repository contains three checks that each guard a specific claim made in
+# the report. None of them is useful if it is only ever run by hand:
+#
+#   run_benchmark.py    regenerates every reported number from the committed data
+#   comparator_oracle   staged self-test of the Grover oracle, incl. zero leakage
+#   verify_parity.py    proves the browser demo computes what Python computes
+#
+# The parity check is the one most likely to rot: retraining writes a new
+# ocr_backend.npz but does not refresh web/model.json, and the demo deploys to a
+# public URL automatically. Catching that on push rather than in front of an
+# audience is the point.
+
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The dataset and trained backend are committed, so nothing is generated
+      # or trained here. That is deliberate: CI verifies the artifacts that are
+      # actually published, rather than rebuilding them and testing a different
+      # thing than reviewers will see.
+      - name: Confirm committed artifacts are present
+        run: |
+          test -f data/processed/clean_digital/chars.npz
+          test -f integration/ocr_backend.npz
+          test -f web/model.json
+          python -c "import json; m=json.load(open('data/processed/manifest.json')); print('dataset seed', m['seed'], '| fonts', m['platform'])"
+
+      - name: Grover oracle self-test
+        run: python track_b_search/oracle/comparator_oracle.py
+
+      - name: Benchmark reproduces the reported numbers
+        run: |
+          python benchmarking/run_benchmark.py
+          python - <<'PY'
+          import json
+          r = json.load(open("benchmarking/results.json"))
+          # Tolerance rather than equality: LogisticRegression's solver is not
+          # bit-reproducible across BLAS builds, so a CI runner lands within a
+          # few tenths of a point of the committed figures rather than on them.
+          checks = [
+              ("clean_digital CER", r["B"]["clean_digital"]["cer_mean"], 0.065, 0.02),
+              ("clean_scan CER",    r["B"]["clean_scan"]["cer_mean"],    0.088, 0.02),
+              ("Grover CX exponent", r["D"]["cx_exponent"],              1.39,  0.05),
+              ("raw pixels acc",    r["A"]["ALL_TIERS"]["raw pixels"]["acc"], 0.936, 0.01),
+          ]
+          bad = [(n, v, e) for n, v, e, tol in checks if abs(v - e) > tol]
+          for n, v, e, tol in checks:
+              print(f"  {n:22s} {v:.4f}  expected ~{e}  {'ok' if abs(v-e)<=tol else 'OUT OF RANGE'}")
+          if bad:
+              raise SystemExit("benchmark drifted from the reported values")
+          PY
+
+      - name: Browser demo matches the Python pipeline
+        run: python web/verify_parity.py
+
+      - name: Report and results agree
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          r = json.load(open("benchmarking/results.json"))
+          rep = pathlib.Path("docs/final_report.md").read_text()
+          missing = []
+          for tier, b in r["B"].items():
+              for val in ("{:.1f}%".format(b["cer_mean"] * 100),
+                          "{:.0f}%".format(b["id_exact_match"] * 100)):
+                  if val not in rep:
+                      missing.append(f"{tier}: {val}")
+          for stale in ("PENDING", "TODO", "TBD"):
+              if stale in rep:
+                  missing.append(f"placeholder {stale} left in report")
+          print("report/results mismatches:", missing or "none")
+          if missing:
+              raise SystemExit("the report does not match benchmarking/results.json")
+          PY

@@ -1,0 +1,37 @@
+{
+  "clean_digital": {
+    "quantum_cer": 0.06612410954017806,
+    "tesseract_cer": 0.019855496435182255,
+    "quantum_id_exact": 1.0,
+    "tesseract_id_exact": 0.9166666666666666,
+    "n_docs": 12
+  },
+  "clean_scan": {
+    "quantum_cer": 0.08525623004576227,
+    "tesseract_cer": 0.018932525762923095,
+    "quantum_id_exact": 0.5833333333333334,
+    "tesseract_id_exact": 0.8333333333333334,
+    "n_docs": 12
+  },
+  "noisy_scan": {
+    "quantum_cer": 0.7953651888924536,
+    "tesseract_cer": 1.0,
+    "quantum_id_exact": 0.0,
+    "tesseract_id_exact": 0.0,
+    "n_docs": 12
+  },
+  "clear_handwriting": {
+    "quantum_cer": 0.5179917517310035,
+    "tesseract_cer": 0.20193109154418284,
+    "quantum_id_exact": 0.0,
+    "tesseract_id_exact": 0.16666666666666666,
+    "n_docs": 12
+  },
+  "degraded_handwriting": {
+    "quantum_cer": 0.8568150371801982,
+    "tesseract_cer": 1.0,
+    "quantum_id_exact": 0.0,
+    "tesseract_id_exact": 0.0,
+    "n_docs": 12
+  }
+}
