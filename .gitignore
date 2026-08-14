@@ -34,3 +34,8 @@ integration/ocr_backend.npz
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tooling for the documentation pass — not part of the deliverable
+.claude/
+.nb_snapshot/
+tools/ 

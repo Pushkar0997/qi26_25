@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 
 import matplotlib
+# Agg (write-to-file, no window) must be selected BEFORE pyplot is imported.
+# Without it this script fails on a headless machine or over ssh, which is
+# exactly where figures tend to get regenerated.
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt          # noqa: E402
 import numpy as np                       # noqa: E402
@@ -22,6 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "benchmarking"
 FIGS = BENCH / "figures"
 
+# The embedded newlines split each tick label over two lines, which is what lets
+# five tier names sit under a 9-inch axis without rotating them to 45 degrees.
 TIER_LABELS = {
     "clean_digital": "clean\ndigital",
     "clean_scan": "clean\nscan",
@@ -29,6 +34,9 @@ TIER_LABELS = {
     "clear_handwriting": "clear\nhandwr.",
     "degraded_handwriting": "degraded\nhandwr.",
 }
+# A fixed order rather than whatever the JSON happens to iterate in. Every figure
+# then reads left to right as increasing degradation, so tiers stay comparable
+# from one figure to the next.
 ORDER = ["clean_digital", "clean_scan", "noisy_scan",
          "clear_handwriting", "degraded_handwriting"]
 
@@ -84,6 +92,8 @@ def fig_grover_scaling(res):
     rows = res["D"]["rows"]
     N = np.array([r["n_text"] for r in rows], float)
     cx = np.array([r["cx"] for r in rows], float)
+    # The exponent is read from the results file rather than refitted here, so the
+    # number in the title cannot disagree with the one quoted in the report.
     exp = res["D"]["cx_exponent"]
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
@@ -117,6 +127,8 @@ def fig_shot_noise(res):
     vals = [E[k] for k in keys]
 
     fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    # Log x-axis because the shot levels double: on a linear axis everything below
+    # 1024 collapses against the left edge.
     ax.semilogx([int(k) for k in keys], vals, "o-")
     ax.axhline(E["exact"], ls="--", c="grey",
                label="exact statevector ({:.1%})".format(E["exact"]))
@@ -138,6 +150,9 @@ def fig_cer(res):
     seg = [B[t]["segmentation_recall_proxy"] for t in ORDER]
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
+    # The error bars are the standard deviation ACROSS DOCUMENTS, not a confidence
+    # interval. They are wide on the degraded tiers because failure there is
+    # per-document and close to all-or-nothing, not a uniform accuracy drop.
     ax.bar(x, cer, 0.55, yerr=err, capsize=4, color="#b44", label="CER")
     ax.set_xticks(x)
     ax.set_xticklabels([TIER_LABELS[t] for t in ORDER])
@@ -166,6 +181,9 @@ def fig_cer(res):
 def fig_variational(var):
     labels = ["quantum\nuntrained", "quantum\ntrained",
               "classical\nuntrained", "classical\ntrained", "raw\npixels"]
+    # Untrained entries are plain floats while trained ones carry a whole result
+    # dict, hence the asymmetric indexing. All five are accuracies on the SAME
+    # sealed test partition, which is what makes the bars comparable at all.
     vals = [var["untrained"]["quantum"], var["trained"]["quantum"]["final_test_acc"],
             var["untrained"]["classical"], var["trained"]["classical"]["final_test_acc"],
             var["untrained"]["raw_pixels"]]
@@ -177,6 +195,9 @@ def fig_variational(var):
         ax.text(i, v + 0.002, "{:.3f}".format(v), ha="center", fontsize=9)
     ax.set_xticks(range(5))
     ax.set_xticklabels(labels, fontsize=9)
+    # Truncated y-axis again, for the reason given in fig_accuracy_by_tier: every
+    # bar is above 0.85 and the differences under discussion are around 0.01. The
+    # value labels drawn above each bar carry the exact numbers, so nothing hides.
     ax.set_ylim(0.85, max(vals) + 0.02)
     ax.set_ylabel("accuracy on sealed test partition")
     ax.axhline(var["untrained"]["raw_pixels"], ls=":", c="grey", lw=1)
@@ -228,6 +249,9 @@ def main():
     else:
         print("! benchmarking/results.json missing — run run_benchmark.py first")
 
+    # Each results file is handled separately because the three experiments live in
+    # three different scripts. A missing file prints a hint and costs one figure,
+    # rather than aborting the whole regeneration.
     var = load("variational_results.json")
     if var:
         fig_variational(var); made.append("variational_training.png")

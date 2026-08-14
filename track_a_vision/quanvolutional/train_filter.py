@@ -61,6 +61,8 @@ TIERS = ["clean_digital", "clean_scan", "noisy_scan",
 
 def load_all():
     X, y = [], []
+    # Every tier pooled: the filter is one fixed transform applied to all input
+    # qualities, so tuning it on clean crops alone would optimise the wrong thing.
     for t in TIERS:
         d = np.load(DATA / t / "chars.npz")
         X.append(d["crops"])
@@ -147,6 +149,8 @@ def main():
     Xn = normalize_crops(X)
     classes = np.unique(y)
     cls_idx = {c: i for i, c in enumerate(classes)}
+    # Integer labels, because ridge_head does one-hot least squares and compares
+    # argmax over columns -- a string label has no column index.
     yi = np.array([cls_idx[c] for c in y])
 
     # ---- SEALED TEST PARTITION -------------------------------------------
@@ -166,6 +170,9 @@ def main():
 
     # Within the search partition: train/val for the angle objective.
     rng = np.random.default_rng(args.seed)
+    # A subset for the angle search only. Every objective evaluation recomputes
+    # features for every crop, so at a 300-evaluation budget the full search
+    # partition would put this into hours. The final numbers use everything.
     sub = rng.permutation(len(Xsearch))[:min(args.subset, len(Xsearch))]
     Xs, ys = Xsearch[sub], ysearch[sub]
     ntr = int(0.7 * len(Xs))
@@ -186,6 +193,9 @@ def main():
     base_q = evaluate_final(quanv_features(Xsearch, correlations=True), ysearch,
                             quanv_features(Xte, correlations=True), yte)
     w_rng = np.random.default_rng(42)
+    # 10 filters x 4 weights: the same 40 parameters and the same 160-dimensional
+    # output as the classical control in benchmark experiment A, so the trained
+    # comparison starts from the same footing as the untrained one.
     theta0_c = w_rng.normal(0, 1, (10, 4)).ravel()
     base_c = evaluate_final(classical_conv_from_weights(Xsearch, theta0_c), ysearch,
                             classical_conv_from_weights(Xte, theta0_c), yte)
@@ -259,6 +269,9 @@ def main():
     print("Training gain: quantum {:+.3f}, classical {:+.3f}".format(dq, dc))
     print("Raw-pixel reference: {:.3f}".format(base_raw))
     q_final = trained["quantum"]["final_test_acc"]
+    # Expect the else branch. In the reference run, training moved the quantum
+    # filter by -1.1 points and left it below raw pixels; the if branch exists so
+    # the script would report the opposite honestly if it ever occurred.
     if q_final > base_raw:
         print("Trained quantum filter now EXCEEDS raw pixels.")
     else:

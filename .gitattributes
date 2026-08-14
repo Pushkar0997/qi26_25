@@ -1,0 +1,12 @@
+# Normalise line endings in the repository regardless of each machine's
+# core.autocrlf setting. Without this, whether CRLF reaches a commit depends on
+# an invisible global config, and notebooks written by nbformat on Windows can
+# show up as whole-file diffs on a machine configured differently.
+* text=auto eol=lf
+
+# Notebooks are JSON: always LF, and treat as text so diffs are meaningful.
+*.ipynb text eol=lf
+
+# Binary — never touch these.
+*.png binary
+*.npz binary

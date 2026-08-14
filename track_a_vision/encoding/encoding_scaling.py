@@ -43,6 +43,9 @@ def build_frqi_circuit(patch):
     being recoverable only STATISTICALLY -- you estimate theta from measurement
     frequencies, which needs many shots and is never exact.
     """
+    # Row-major flatten fixes the mapping from (row, col) to position index.
+    # build_neqr_circuit below uses the same convention, which is what makes the
+    # two circuits encode the same image rather than two transposes of it.
     flat = patch.flatten()
     n_pixels = len(flat)
 
@@ -141,6 +144,8 @@ def measure(qc):
 
 
 def main():
+    # Seeded so the table is reproducible run to run: NEQR's gate count depends on
+    # the actual pixel values, so unseeded intensities would shift the CX column.
     rng = np.random.default_rng(26)
     rows = []
 
@@ -178,6 +183,9 @@ def main():
     print("CX ratio   (NEQR/FRQI) across sizes: " +
           " -> ".join("{:.2f}".format(r["cx_ratio"]) for r in rows))
 
+    # The verdict is COMPUTED from the measurements rather than written in, so this
+    # script cannot print a conclusion its own numbers do not support. It was
+    # written while the Week 1 prediction was still expected to hold.
     qr = [r["qubit_ratio"] for r in rows]
     verdict = ("NARROWS" if qr[-1] < qr[0] else
                "WIDENS" if qr[-1] > qr[0] else "FLAT")
@@ -187,6 +195,8 @@ def main():
           "position register while their colour registers stay constant."
           .format(verdict.lower()))
 
+    # Written into benchmarking/ so that make_figures.py and notebook 01 both read
+    # the same numbers this run just printed.
     out = ROOT / "benchmarking" / "encoding_scaling.json"
     out.write_text(json.dumps({"rows": rows, "qubit_ratio_verdict": verdict},
                               indent=2))

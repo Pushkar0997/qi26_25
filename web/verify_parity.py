@@ -33,6 +33,9 @@ from features import quanv_features, normalize_crops    # noqa: E402
 
 WEB = ROOT / "web"
 
+# The Node harness lives here as a string and is written to a temp file at run
+# time rather than committed as a .mjs file, so there is no second copy that could
+# drift out of step with this script or get swept into the static site build.
 NODE_HARNESS = r"""
 import { Pipeline } from './pipeline.js';
 import { readFileSync } from 'fs';
@@ -84,12 +87,17 @@ def run_node(payload, model_path):
     with tempfile.TemporaryDirectory() as td:
         inp = Path(td) / "input.json"
         inp.write_text(json.dumps(payload))
+        # Written into web/ and run with cwd=web/ because pipeline.js resolves
+        # './model.json' relative to the process directory. Running it from the
+        # temp directory instead makes the model load fail with a fetch error.
         harness = WEB / "_parity_harness.mjs"
         harness.write_text(NODE_HARNESS)
         try:
             r = subprocess.run(
                 ["node", str(harness), str(inp), str(model_path)],
                 capture_output=True, text=True, cwd=str(WEB), timeout=600)
+        # Removed in a finally block: a leftover _parity_harness.mjs in web/ would
+        # otherwise be picked up by the site build and shipped with the demo.
         finally:
             harness.unlink(missing_ok=True)
     if r.returncode != 0:
@@ -140,6 +148,9 @@ def main():
     model = WEB / "model.json"
 
     docs = []
+    # Three tiers rather than one. Parity on a clean page proves little, because
+    # the segmentation branches most likely to differ between the two
+    # implementations -- speckle removal, wide-box splitting -- only fire on noise.
     for tier in ["clean_digital", "clean_scan", "noisy_scan"]:
         f = ROOT / "data" / "processed" / tier / "doc_000.png"
         if f.exists():
@@ -150,12 +161,18 @@ def main():
     all_ok = True
     for tier, f in docs:
         arr = np.array(Image.open(f).convert("L"), dtype=np.uint8)
+        # The browser only ever sees canvas RGBA, so the greyscale page is expanded
+        # to four channels here. Handing pipeline.js greyscale would test a path
+        # the demo never actually takes.
         rgba = np.dstack([arr, arr, arr, np.full_like(arr, 255)]).ravel().tolist()
 
         # Python side
         boxes_py = P.segment_characters(arr)
         crops_py = P.crops_from_boxes(arr, boxes_py)
         norm_py = normalize_crops(crops_py)
+        # correlations=True throughout, because the browser serves the +ZZ readout.
+        # A parity check against the 64-dim marginal features would pass happily
+        # while the demo shipped something else.
         feat_py = quanv_features(norm_py, correlations=True)
         coef, intercept, classes = P.load_backend()
         chars_py = P.predict_chars(crops_py, coef, intercept, classes)
@@ -214,6 +231,8 @@ def main():
 
     print("\n" + ("ALL STAGES MATCH — browser output is the Python pipeline"
                   if all_ok else "PARITY FAILURE — do not ship until fixed"))
+    # Non-zero exit on failure, so this can gate a release step. The printed banner
+    # is for humans; the exit code is what a script reads.
     return 0 if all_ok else 1
 
 
