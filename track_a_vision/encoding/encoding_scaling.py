@@ -33,31 +33,64 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def build_frqi_circuit(patch):
-    """Unchanged from frqi_neqr_starter.ipynb."""
+    """FRQI encoding: intensity as a rotation ANGLE on one shared colour qubit.
+
+    Unchanged from frqi_neqr_starter.ipynb.
+
+    The state produced is
+        (1/2^n) * sum_i (cos(theta_i)|0> + sin(theta_i)|1>) tensor |i>
+    so a single colour qubit carries the whole image, at the cost of intensity
+    being recoverable only STATISTICALLY -- you estimate theta from measurement
+    frequencies, which needs many shots and is never exact.
+    """
     flat = patch.flatten()
     n_pixels = len(flat)
+
+    # Position register addresses one basis state per pixel.
     n_pos = int(np.ceil(np.log2(n_pixels)))
+
+    # Map intensity to [0, pi/2]. The quarter-turn range (rather than a full pi)
+    # keeps the mapping injective: sin^2 is monotonic on [0, pi/2], so a
+    # measured probability inverts to exactly one intensity.
     angles = (np.pi / 2) * (flat / 255.0)
 
     pos = QuantumRegister(n_pos, "pos")
     color = QuantumRegister(1, "color")
     qc = QuantumCircuit(pos, color)
+
+    # Uniform superposition over positions: every pixel is "addressed at once".
     qc.h(pos)
 
     for i, theta in enumerate(angles):
         bits = format(i, "0{}b".format(n_pos))
+
+        # X-sandwich: multi-controlled gates fire on all-ones, so flip the
+        # qubits that should be 0 to make position i look like all-ones.
         for j, b in enumerate(bits):
             if b == "0":
                 qc.x(pos[j])
+
+        # RY(2*theta) because RY rotates the STATE by theta when the angle
+        # parameter is 2*theta -- the SU(2) half-angle convention again.
         qc.append(RYGate(2 * theta).control(n_pos), list(pos) + [color[0]])
+
+        # Undo the sandwich so the next pixel starts from a clean register.
         for j, b in enumerate(bits):
             if b == "0":
                 qc.x(pos[j])
+
     return qc, n_pos + 1
 
 
 def build_neqr_circuit(patch, bit_depth=8):
-    """Unchanged from frqi_neqr_starter.ipynb."""
+    """NEQR encoding: intensity as a BIT STRING on a colour register.
+
+    Unchanged from frqi_neqr_starter.ipynb.
+
+    Trade-off against FRQI: 8 colour qubits instead of 1, but reconstruction is
+    EXACT -- measuring the colour register returns the pixel value directly,
+    with no estimation and no shot-noise floor.
+    """
     flat = patch.flatten()
     n_pixels = len(flat)
     n_pos = int(np.ceil(np.log2(n_pixels)))
@@ -68,21 +101,39 @@ def build_neqr_circuit(patch, bit_depth=8):
     qc.h(pos)
 
     for i, val in enumerate(flat):
-        bp = format(i, "0{}b".format(n_pos))
-        bv = format(int(val), "0{}b".format(bit_depth))
+        bp = format(i, "0{}b".format(n_pos))          # position index in binary
+        bv = format(int(val), "0{}b".format(bit_depth))  # intensity in binary
+
+        # Same X-sandwich trick as FRQI, to condition on position i.
         for j, b in enumerate(bp):
             if b == "0":
                 qc.x(pos[j])
+
+        # Write the intensity bits. Only 1-bits need a gate: the colour
+        # register starts at |0>, so writing a 0 is a no-op. This is why NEQR's
+        # gate count depends on the actual pixel VALUES, not just the count.
         for k, b in enumerate(bv):
             if b == "1":
                 qc.append(XGate().control(n_pos), list(pos) + [color[k]])
+
         for j, b in enumerate(bp):
             if b == "0":
                 qc.x(pos[j])
+
     return qc, n_pos + bit_depth
 
 
 def measure(qc):
+    """Transpile to a common gate set and count resources.
+
+    Decomposing to {u, cx} matters for a fair comparison: multi-controlled gates
+    are single instructions at the abstract level but expand into very different
+    numbers of two-qubit gates depending on their control count. Counting before
+    transpilation would make a 6-control gate look as cheap as a CX.
+
+    No backend is passed on purpose -- we want the abstract cost, not one capped
+    by whatever the local simulator can hold.
+    """
     t = transpile(qc, basis_gates=["u", "cx"], optimization_level=1)
     ops = t.count_ops()
     return {"depth": t.depth(), "cx": ops.get("cx", 0),
@@ -96,7 +147,12 @@ def main():
     print("{:>7} {:>8} {:>18} {:>18} {:>10}".format(
         "patch", "pixels", "FRQI (q/depth/cx)", "NEQR (q/depth/cx)", "qubit x"))
 
+    # 2x2 is the patch size the pipeline actually uses; 4x4 and 8x8 test how the
+    # cost RATIO behaves as patches grow, which is the Week 1 open question.
     for side in [2, 4, 8]:
+        # Random intensities rather than a fixed pattern: NEQR's gate count
+        # depends on how many 1-bits the values contain, so a contrived patch
+        # (all zeros, say) would understate its true cost.
         patch = rng.integers(0, 256, (side, side))
 
         f_qc, f_q = build_frqi_circuit(patch)

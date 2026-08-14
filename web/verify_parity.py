@@ -74,6 +74,13 @@ console.log(JSON.stringify(out));
 
 
 def run_node(payload, model_path):
+    """Execute the browser pipeline under Node and return its results as JSON.
+
+    Node is used rather than a headless browser because pipeline.js is pure
+    computation with no DOM dependency -- the only browser API it touches is
+    fetch(), which the harness shims. That keeps this check runnable in CI or
+    on a laptop with no browser installed.
+    """
     with tempfile.TemporaryDirectory() as td:
         inp = Path(td) / "input.json"
         inp.write_text(json.dumps(payload))
@@ -154,6 +161,10 @@ def main():
         chars_py = P.predict_chars(crops_py, coef, intercept, classes)
         text_py = P.assemble_text(boxes_py, chars_py)
         field_py = P._locate_id_field(text_py)
+        # Search for a two-character slice of the field the pipeline actually
+        # recovered, so the pattern is guaranteed to be present and Grover has
+        # something to find. A hardcoded pattern would silently degrade this
+        # into an "absent pattern" test on most documents.
         pattern = field_py[2:4] if len(field_py) >= 4 else "26"
 
         payload = {
@@ -163,6 +174,10 @@ def main():
             "width": int(arr.shape[1]), "height": int(arr.shape[0]),
             "rgba": rgba, "pattern": pattern,
         }
+        # Hand the SAME crops Python produced to the JS feature extractor, so
+        # stage 1 isolates the quantum maths from any difference in how the two
+        # implementations cut crops. Stages 2-4 then run the full JS pipeline
+        # from raw pixels, which tests the cutting as well.
         js = run_node(payload, "./model.json")
 
         raw = js["features"]
@@ -176,6 +191,10 @@ def main():
         text_match = js["text"] == text_py
         field_match = js["field"] == field_py
 
+        # 1e-9 rather than exact equality: the two implementations sum
+        # floating-point products in different orders, so agreement at machine
+        # epsilon (~1e-16) is the realistic ceiling. Anything at 1e-6 or worse
+        # would indicate a real divergence, not rounding.
         ok = fmax < 1e-9 and box_match and text_match and field_match
         all_ok &= ok
         print("[{}] {}".format("PASS" if ok else "FAIL", tier))

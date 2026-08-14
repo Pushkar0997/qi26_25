@@ -47,10 +47,21 @@ def main():
             "Run:  python integration/pipeline.py --train")
 
     d = np.load(MODEL, allow_pickle=True)
+
+    # The trained logistic-regression head: one weight row per character class.
     coef = np.asarray(d["coef"], dtype=float)
     intercept = np.asarray(d["intercept"], dtype=float)
+
+    # Class labels in the SAME ROW ORDER as coef, so the browser can map an
+    # argmax straight back to a character. Order is not alphabetical by
+    # accident of sklearn -- it is whatever np.unique produced during training,
+    # which is why it is exported rather than reconstructed.
     classes = [str(c) for c in d["classes"]]
 
+    # The quanvolutional filter as a single 16x16 unitary. Extracting it here
+    # means the browser never needs Qiskit: applying the filter is one
+    # matrix-vector product. Seed 42 and depth 2 must match what trained the
+    # head above, or the features and the weights describe different circuits.
     U = _filter_unitary(4, 42, 2)
 
     payload = {

@@ -34,6 +34,13 @@ ORDER = ["clean_digital", "clean_scan", "noisy_scan",
 
 
 def load(name):
+    """Read a results file, returning None if the experiment has not been run.
+
+    Returning None rather than raising lets the script produce whatever figures
+    it can. That matters because the experiments live in different scripts
+    (run_benchmark.py, train_filter.py, encoding_scaling.py) and a user may
+    reasonably have run only some of them.
+    """
     p = BENCH / name
     if not p.exists():
         return None
@@ -43,6 +50,10 @@ def load(name):
 def fig_accuracy_by_tier(res):
     A = res["A"]
     methods = list(A["ALL_TIERS"].keys())
+
+    # Grouped bars: one cluster per tier, one bar per method. Bar width is
+    # derived from the method count so the clusters stay separated no matter how
+    # many extractors are compared.
     x = np.arange(len(ORDER))
     w = 0.8 / len(methods)
 
@@ -54,6 +65,10 @@ def fig_accuracy_by_tier(res):
     ax.set_xticks(x)
     ax.set_xticklabels([TIER_LABELS[t] for t in ORDER])
     ax.set_ylabel("character accuracy")
+    # Start the axis at 0.5, not 0. All methods score well above chance, and a
+    # zero baseline would compress the differences that matter into a few
+    # pixels. Flagged here because truncated axes can mislead -- the intent is
+    # legibility, and the numeric table in the report carries the exact values.
     ax.set_ylim(0.5, 1.02)
     ax.axhline(A["ALL_TIERS"]["raw pixels"]["acc"], ls=":", c="grey", lw=1)
     ax.set_title("Feature extractors at matched dimensionality\n"
@@ -73,6 +88,11 @@ def fig_grover_scaling(res):
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
     ax.loglog(N, cx, "o-", label="measured CX count")
+
+    # Reference lines anchored at the first measured point, so all three curves
+    # start together and only their SLOPES differ. On log-log axes a power law
+    # is a straight line, so "measured sits above linear" is directly readable
+    # as "grows faster than linearly".
     ref = cx[0] * (N / N[0])
     ax.loglog(N, ref, "--", c="grey", label="linear reference (slope 1)")
     ax.loglog(N, cx[0] * np.sqrt(N / N[0]), ":", c="green",
@@ -90,8 +110,10 @@ def fig_grover_scaling(res):
 
 def fig_shot_noise(res):
     E = res["E"]
+    # "exact" is the noiseless statevector result and has no shot count, so it
+    # is drawn as a horizontal reference rather than a point on the x axis.
     keys = [k for k in E if k != "exact"]
-    keys.sort(key=int)
+    keys.sort(key=int)          # dict order is insertion order, not numeric
     vals = [E[k] for k in keys]
 
     fig, ax = plt.subplots(figsize=(6.5, 4.2))
@@ -122,6 +144,10 @@ def fig_cer(res):
     ax.set_ylabel("character error rate")
     ax.grid(axis="y", alpha=0.3)
 
+    # Twin axis: CER and segmentation ratio have different units and ranges, but
+    # plotting them together is the point -- the visual correlation between them
+    # is the evidence that the front end, not the classifier, drives end-to-end
+    # error.
     ax2 = ax.twinx()
     ax2.plot(x, seg, "o--", c="#248", label="segmentation ratio")
     ax2.set_ylabel("segmentation ratio (1.0 = ideal)")

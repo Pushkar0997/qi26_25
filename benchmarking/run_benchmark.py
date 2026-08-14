@@ -47,6 +47,17 @@ def load_tier(tier):
 
 
 def fit_score(F, y, seed=26):
+    """Fit the standard head and return held-out accuracy.
+
+    Every experiment routes through this one function so that comparisons are
+    never confounded by a different classifier, split, or regularisation
+    strength. stratify=y keeps the class balance identical across train and
+    test, which matters here because character frequencies are very uneven --
+    'E' and digits are common, 'J' and 'K' rare.
+
+    The fixed random_state is what makes two extractors comparable at all: they
+    are scored on exactly the same rows.
+    """
     a, b, c, d = train_test_split(F, y, test_size=0.25, random_state=seed,
                                   stratify=y)
     clf = LogisticRegression(max_iter=3000, C=5.0).fit(a, c)
@@ -59,6 +70,17 @@ def fit_score(F, y, seed=26):
 
 def experiment_a():
     print("\n[A] Feature extractor comparison, per tier")
+    # Four extractors, deliberately chosen so the comparison isolates one
+    # variable at a time:
+    #   quanv marginals   quantum filter, 4 readouts/patch  -> 64 features
+    #   quanv +ZZ         same filter, 10 readouts/patch    -> 160 features
+    #   classical conv    10 random filters                 -> 160 features
+    #   raw pixels        no feature extraction at all      -> 64 features
+    #
+    # n_filters=10 is not arbitrary: it makes the classical control produce
+    # exactly 160 features, matching the quantum +ZZ readout. Without that
+    # matching, a win would be indistinguishable from simply handing one method
+    # a wider representation.
     extractors = {
         "quanv (marginals)":      lambda X: quanv_features(X),
         "quanv (+ZZ corr)":       lambda X: quanv_features(X, correlations=True),
@@ -77,7 +99,10 @@ def experiment_a():
         print("  {:22s} ".format(tier) + "  ".join(
             "{}={:.3f}".format(k.split()[0], v["acc"]) for k, v in rows[tier].items()))
 
-    # pooled across all tiers
+    # Pooled across all tiers. Reported separately from the per-tier numbers
+    # because the tiers have very different difficulty: an average of the five
+    # per-tier accuracies would weight a 12-document tier the same as the crop
+    # counts warrant, whereas pooling weights by actual sample count.
     X = np.concatenate([load_tier(t)[0] for t in TIERS])
     y = np.concatenate([load_tier(t)[1] for t in TIERS])
     Xn = normalize_crops(X)
@@ -145,6 +170,11 @@ def experiment_c():
     from qiskit import transpile
     res = {}
 
+    # Resource cost of ONE quanvolutional filter application. The
+    # circuits_per_8x8_char figure matters as much as the gate count: the filter
+    # is tiny, but it runs 16 times per character, so the per-document cost is
+    # 16 x (characters) circuit executions. Notebook 05 turns this into a
+    # hardware time estimate.
     filt = random_entangling_circuit(4, seed=42, depth=2)
     t = transpile(filt, basis_gates=["u", "cx"], optimization_level=1)
     res["quanv_filter"] = {"qubits": 4, "depth": t.depth(),
@@ -176,6 +206,11 @@ def experiment_d():
         rows.append(oracle_resources(t, "26", hexa))
         print("  N={:3d}  qubits={:2d}  depth={:6d}  cx={:6d}".format(
             N, rows[-1]["qubits"], rows[-1]["depth"], rows[-1]["cx"]))
+    # Fit a power law cx ~ N^k by regressing in log-log space, where a power
+    # law is a straight line and k is its slope. Reported rather than assumed:
+    # k near 0.5 would mean the sqrt-N advantage survives, k near 1 means data
+    # loading is linear, and the measured 1.39 means loading dominates and the
+    # advantage does not survive at all.
     N = np.array([r["n_text"] for r in rows], dtype=float)
     cx = np.array([r["cx"] for r in rows], dtype=float)
     exponent = float(np.polyfit(np.log(N), np.log(cx), 1)[0])
@@ -188,6 +223,13 @@ def experiment_d():
 # --------------------------------------------------------------------------
 
 def experiment_e(shot_levels=(64, 256, 1024, 4096, None)):
+    """Shot-noise sensitivity.
+
+    Simulation reads probabilities exactly; hardware can only sample them. This
+    sweep answers the practical question "how many shots would a real device
+    need per patch?", which is the dominant hardware cost in this pipeline.
+    None means the exact statevector result -- the ceiling to approach.
+    """
     print("\n[E] Shot-noise sensitivity of the quantum feature stage")
     X = np.concatenate([load_tier(t)[0] for t in TIERS])
     y = np.concatenate([load_tier(t)[1] for t in TIERS])

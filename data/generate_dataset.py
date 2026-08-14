@@ -134,7 +134,14 @@ DEPARTMENTS = ["RESEARCH", "ARCHIVES", "OPERATIONS", "COMPLIANCE"]
 # --------------------------------------------------------------------------
 
 def make_document_text(rng):
-    """Build one document's lines plus the doc ID that Track B will search for."""
+    """Build one document's lines plus the doc ID that Track B will search for.
+
+    The ID format QI##-XXXX is deliberate: it mixes digits with hex letters, so
+    the downstream identifier extractor has to distinguish it from a pure-digit
+    field like REF. That distinction turned out to matter -- an earlier scoring
+    rule based on digit density alone preferred REF and searched the wrong
+    field entirely.
+    """
     doc_id = "QI{}-{}{}{}{}".format(
         rng.integers(10, 100),
         *[rng.choice(list("ABCDEF0123456789")) for _ in range(4)],
@@ -185,6 +192,11 @@ def render_page(lines, handwriting, rng, font_print, font_hand):
 
             # Per-glyph jitter simulates the natural inconsistency of
             # handwriting: baseline wobble, slight rotation, size variation.
+            # These three together are what a font alone cannot fake -- printed
+            # text has identical glyph shapes at identical baselines, and it is
+            # that regularity, not the letterforms, that makes it easy to
+            # segment. Perturbing position/rotation/scale per character
+            # reproduces the part of handwriting that actually breaks OCR.
             if handwriting:
                 dx = rng.normal(0, 1.4)
                 dy = rng.normal(0, 2.2)
@@ -200,8 +212,11 @@ def render_page(lines, handwriting, rng, font_print, font_hand):
                     font_path, max(10, int(FONT_SIZE * scale))
                 )
 
-            # Draw the glyph on its own tile so it can be rotated independently,
-            # then paste. The same tile mask paints the index map.
+            # Draw the glyph on its own tile so it can be rotated
+            # independently, then paste. Rotating the whole page instead would
+            # rotate every glyph by the same angle, which is a scanning
+            # artifact, not handwriting variation. The same tile mask paints the
+            # index map, which is what keeps the ground-truth boxes exact.
             tw = int(glyph_font.getlength(ch)) + 12
             th = FONT_SIZE * 2
             tile = Image.new("L", (tw, th), color=0)
@@ -251,6 +266,11 @@ def geometric_degrade(page, idx_map, tier, rng):
         imap = imap.rotate(angle, resample=Image.NEAREST, fillcolor=0)
 
     # Low-DPI scan: downsample then upsample, permanently destroying detail.
+    # This is the single most damaging degradation in the set, and the reason
+    # noisy_scan segments so poorly: once adjacent glyphs blur into each other
+    # at 45% scale, no amount of upsampling separates them again. It models a
+    # genuinely common failure -- documents scanned at low DPI and later
+    # enlarged.
     if tier in ("noisy_scan", "degraded_handwriting"):
         f = 0.45 if tier == "noisy_scan" else 0.55
         small = (int(PAGE_W * f), int(PAGE_H * f))
@@ -279,8 +299,11 @@ def photometric_degrade(img, tier, rng):
 
     arr = np.array(img, dtype=np.float32)
 
-    # Contrast reduction pulls everything toward mid-grey — this is what makes
-    # faded photocopies and low-contrast ink genuinely hard to read.
+    # Contrast reduction pulls everything toward mid-grey. This is what makes
+    # faded photocopies genuinely hard to read, and it is why the pipeline
+    # normalises each crop before encoding: the intensity-to-angle map would
+    # otherwise compress a faded character into a narrow band of rotation
+    # angles, nearly indistinguishable from blank paper.
     if params["contrast"] < 1.0:
         arr = 255 - (255 - arr) * params["contrast"]
 
@@ -312,9 +335,16 @@ def extract_crops(page_arr, idx_map_arr, labels, pad=2):
     """
     crops, crop_labels, boxes = [], [], []
 
+    # Index i corresponds to labels[i-1]; the map stores index+1 so that 0 can
+    # mean "no glyph here".
     for i, ch in enumerate(labels, start=1):
         ys, xs = np.where(idx_map_arr == i)
-        if len(ys) < 6:          # glyph was rotated off-page or destroyed
+
+        # Fewer than 6 pixels means the glyph was rotated off-page or destroyed
+        # by degradation. Dropped rather than kept, because a near-empty crop
+        # labelled with a real character is a mislabelled training example --
+        # actively worse than a missing one.
+        if len(ys) < 6:
             continue
 
         y0, y1 = max(0, ys.min() - pad), min(page_arr.shape[0], ys.max() + pad + 1)

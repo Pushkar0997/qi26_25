@@ -343,8 +343,16 @@ def train_backend(seed=26, shots=None, source="segmented"):
 
     np.savez(MODEL_PATH, coef=clf.coef_, intercept=clf.intercept_,
              classes=clf.classes_, holdout_acc=acc)
-    print("backend trained on {} crops ({} source) | held-out char accuracy "
-          "{:.1%}".format(len(X), source, acc))
+    # Spell out what this number is. "67.7%" sitting next to a document CER of
+    # 6.5% reads alarmingly, but they measure different things and are not
+    # comparable: this is ACCURACY (higher is better) on isolated crops cut by
+    # the segmentation path, while CER is edit distance over a whole document.
+    # A model scoring 92.6% here on clean ground-truth bounds produced 42.9%
+    # document CER; this one scores lower here and produces 6.5%. See report
+    # section 6.1.
+    print("backend trained on {} crops ({} source)".format(len(X), source))
+    print("  isolated-character ACCURACY on held-out crops: {:.1%}"
+          " (higher is better; not a document error rate)".format(acc))
     return clf, acc
 
 
