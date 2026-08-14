@@ -52,12 +52,12 @@ The results are largely negative, and deliberately reported as such:
 ## Live demo
 
 **https://pushkar0997.github.io/qi26_25/** — upload a document image and watch
-each pipeline stage run in your browser. Nothing is uploaded to a server.
+each pipeline stage run in the browser. No image leaves the machine.
 
 The demo is not a re-implementation: it loads the exact trained weights and
-filter unitary from this repo, and  asserts stage-by-stage
-that it produces byte-identical output to the Python pipeline (features agree to
-5.6e-16; decoded text is identical).
+filter unitary from this repository, and `web/verify_parity.py` asserts
+stage by stage that it produces byte-identical output to the Python pipeline
+(features agree to 5.6e-16; decoded text is identical).
 
 ## Notebooks
 
@@ -89,7 +89,7 @@ python benchmarking/run_benchmark.py                            # all results, ~
 ```
 
 Full reproduction sequence including the variational and encoding experiments is
-in `docs/final_report.md` §11.
+in Section 11 of `docs/final_report.md`.
 
 ## Layout
 
@@ -116,4 +116,4 @@ docs/final_report.md                         the report
   the reported numbers.
 
 ---
-*Last updated: August 13, 2026*
+*Last updated: August 14, 2026*

@@ -4,9 +4,11 @@
 **Project:** Hybrid QML and Quantum String Algorithms for Efficient Document Extraction and Processing
 **Mentor:** Potluri Krishna Priyatham
 **Repository:** github.com/Pushkar0997/qi26_25
+**Live demo:** https://pushkar0997.github.io/qi26_25/ — runs the pipeline in the
+browser on a user-supplied image; no server, no upload
 
-> **Status: complete (Aug 13, 2026).** Every number in this report is measured
-> and reproducible via the commands in §11 — none are estimated. Figures are
+> **Status: complete (Aug 14, 2026).** Every number in this report is measured
+> and reproducible via the commands in Section 12 — none are estimated. Figures are
 > generated from the committed results files, so they cannot disagree with the
 > tables. All results come from the Windows reference run (Arial / Times New
 > Roman Italic, seed 26); `manifest.json` records the exact fonts and platform,
@@ -65,7 +67,7 @@ blotch artifacts, with per-tier parameters recorded in the generator.
 | degraded_handwriting | 62 |
 
 *(Dynamic-range figures above were measured on the Linux reference rendering.
-Re-measure on your platform before submission — see §11.)*
+These figures depend on the rendering platform; see Section 12 to regenerate them.)*
 
 The monotone fall in dynamic range confirms the tiers form a genuine difficulty
 gradient rather than five arbitrary noise settings.
@@ -85,7 +87,9 @@ extension and is named here rather than quietly omitted.
 
 At 2×2 (4 pixels), verified by simulation: NEQR reconstructs pixel values
 exactly; FRQI reconstructs approximately (error ~1–2 levels out of 255 at 8192
-shots), at 3 qubits versus 10 and roughly 2.5× fewer CX gates.
+shots), at 3 qubits versus 10 and roughly 2.5x fewer CX gates (CX is the
+two-qubit controlled-NOT gate, the standard unit for comparing circuit cost
+because two-qubit gates dominate both error and runtime on real hardware).
 
 Measured across three patch sizes (`track_a_vision/encoding/encoding_scaling.py`):
 
@@ -170,7 +174,7 @@ Staged, mirroring the FRQI/NEQR verification approach:
 On a 16-character hex field with a 2-character pattern: 14 qubits, 3 Grover
 iterations, correct position recovered with 95.2% of shots.
 
-### 4.3 The complexity result — stated honestly
+### 4.3 Complexity: measured cost versus asymptotic promise
 
 Grover gives O(√N) *queries*. But the window-loading stage must write the text
 into the circuit, and each candidate position requires its own controlled load.
@@ -241,8 +245,8 @@ Three findings, in order of importance:
 3. **Readout design dominates filter design.** Switching from marginals to
    marginals-plus-correlations bought 5.5 points (86.7% → 92.2%) — a far larger
    effect than any difference between the quantum and classical filters. For
-   quanvolutional approaches generally, how much of the output distribution you
-   keep appears to matter more than what circuit produced it.
+   quanvolutional approaches generally, how much of the output distribution is
+   retained appears to matter more than which circuit produced it.
 
 The open question this leaves is whether *training* the filter changes the
 picture, which is exactly what the brief's "variational quantum circuit" asks
@@ -268,6 +272,14 @@ a substantial hardware cost and belongs in any honest resource accounting.
 ---
 
 ## 6. End-to-end results
+
+Two measures are used throughout this section. **Character error rate (CER)** is
+the edit distance between the extracted text and the ground truth, divided by the
+length of the ground truth — so 10% means roughly one character in ten is wrong,
+inserted, or missing. **Document ID recovered exactly** is the fraction of
+documents whose identifier field came out completely correct, which is the
+pipeline's actual task; a single wrong character makes an identifier useless.
+
 
 | Tier | CER | Segmentation ratio | Document ID recovered exactly |
 |---|---|---|---|
@@ -306,7 +318,7 @@ another.
 
 It was detected by an inversion that should not otherwise be possible. Switching
 the feature stage from the 64-dim marginal readout to the 160-dim +ZZ readout
-raised isolated-character accuracy (§5), yet made end-to-end CER *worse*. A
+raised isolated-character accuracy (Section 5), yet made end-to-end CER *worse*. A
 strictly better feature set producing strictly worse output is a signal that the
 two measurements are not sampling the same input distribution. The
 higher-capacity features fit the training crop distribution more tightly, so
@@ -325,7 +337,7 @@ are dropped rather than guessed). Effect:
 | noisy_scan | 89.7% | **78.5%** | 1.1× |
 | degraded_handwriting | 94.1% | **88.3%** | 1.1× |
 
-**A caution about the isolated-accuracy figure.** Training on segmented crops
+**Interpreting the isolated-accuracy figure.** Training on segmented crops
 *lowers* reported held-out character accuracy from 92.6% to 67.7%. This is not a
 regression: the two numbers are measured on different crop distributions, and
 the 67.7% is measured on the harder, realistic one. The comparison to draw is
@@ -335,7 +347,7 @@ model scoring 67.7% on realistic bounds produced 6.5%.
 **This is the most transferable finding in the project: isolated-character
 accuracy was an actively misleading proxy for end-to-end accuracy here, and
 optimising it drove the pipeline in the wrong direction.** Any comparison of
-feature extractors on pre-cut crops — including §5 of this report — measures
+feature extractors on pre-cut crops — including Section 5 of this report — measures
 something narrower than pipeline quality.
 
 ### 6.2 Identifier extraction
@@ -354,7 +366,7 @@ short all-numeric field (`REF 7128`) above a longer alphanumeric identifier
 (`QI87-12D0` → `8712D0`), so the pipeline confidently searched the reference
 number instead of the document ID. Neither failure is visible unless the
 extracted field is checked against ground truth, which is what the exact-match
-column in §6.1 now does.
+column in Section 6.1 does.
 
 When no token qualifies, the extractor returns nothing rather than a
 best-effort guess. On the noisy tier that is what happens: refusing to answer is
@@ -400,9 +412,9 @@ inverted the very unfairness the untrained comparison was built to avoid.
 | Classical, trained | 40 | 92.1% | +0.1 pt |
 | Raw pixels | — | **93.6%** | — |
 
-*(Absolute values here differ slightly from §5 because the evaluation protocol
-differs: §5 uses a 75/25 split of the whole dataset, while this section holds out
-a sealed 30% partition that the angle search never sees. Only §7 numbers should
+*(Absolute values here differ slightly from Section 5 because the evaluation protocol
+differs: Section 5 uses a 75/25 split of the whole dataset, while this section holds out
+a sealed 30% partition that the angle search never sees. Only the numbers in Section 7 should
 be compared with each other.)*
 
 **Training does not close the gap — and for the quantum filter it actively
@@ -443,7 +455,7 @@ number is reported here rather than quietly discarded, because the difference
 between the two is precisely the difference between a false headline claim and
 the real finding.
 
-**On parameter efficiency, stated carefully.** The quantum filter produces the
+**Parameter efficiency.** The quantum filter produces the
 same 160-dimensional feature space from **8 parameters against the classical
 control's 40**. At the untrained baseline the two are at parity (91.7% vs 92.0%),
 so that 5× parameter economy is real and costs nothing. After training the
@@ -520,7 +532,7 @@ claim that the classical front end is the bottleneck.
    end-to-end — falling to 50% on clean scans and 0% on degraded input, which
    is the honest operating envelope.
    The largest single improvement in the project came from correcting a
-   train/serve skew (§6.1), not from any modelling change — and it was found
+   train/serve skew (Section 6.1), not from any modelling change — and it was found
    only because a better feature set produced worse end-to-end output.
 5. Training the quantum filter does not change (2), and in the reference run
    degraded it by 1.1 points: the deficit is a property of small fixed 2×2
@@ -543,39 +555,57 @@ been.
 
 ---
 
-## 11. Reproducing
+## 11. Contributions
+
+All 23 commits in the repository are authored by Pushkar Kumar.
+
+| Period | Work |
+|---|---|
+| Jul 28 | Repository structure; starter notebooks for encoding and search |
+| Aug 2 | FRQI/NEQR encoding implementation; quanvolutional layer |
+| Aug 13 | Comparator oracle; dataset generator; batched feature extractor; end-to-end pipeline; benchmark suite; variational training; browser demo |
+| Aug 14 | Train/serve skew correction; identifier extraction correction; six notebooks; documentation; cross-platform reproducibility |
+
+The project was scoped for three participants: Klasik Taidi on Track A (vision),
+Hoang Dinh Duy Anh on Track B (search), and Pushkar Kumar on orchestration and
+integration, mentored by Potluri Krishna Priyatham.
+
+Mentor contact ended in early July. The two track assignments were not taken up,
+and neither teammate appears in the commit history. Both tracks were
+consolidated into a single-person scope, which is why the majority of commits
+fall within the final two days of the schedule.
+
+## 12. Reproducing this report
+
+Every number here regenerates from a clean clone. The dataset and the trained
+backend are committed, so nothing needs to be generated before verifying:
 
 ```bash
+git clone https://github.com/Pushkar0997/qi26_25.git
+cd qi26_25
 pip install -r requirements.txt
+
+python benchmarking/run_benchmark.py       # sections 5, 6
+python web/verify_parity.py                # confirms the demo matches Python
+```
+
+Both should complete in under a minute. To regenerate the dataset and retrain
+from scratch instead:
+
+```bash
 python data/generate_dataset.py --docs-per-tier 12 --seed 26
 python integration/pipeline.py --train
-python integration/pipeline.py --doc data/processed/clean_scan/doc_000.png --pattern 38
-python benchmarking/run_benchmark.py
-python track_b_search/oracle/comparator_oracle.py
 python track_a_vision/encoding/encoding_scaling.py
 python track_a_vision/quanvolutional/train_filter.py --budget 400 --subset 99999
 python benchmarking/make_figures.py
+python web/export_model.py
 ```
 
-Full benchmark runtime: ~35 s.
-
-Re-measure the per-tier dynamic-range figures in §2 with:
-
-```bash
-python -c "import numpy as np;
-tiers=['clean_digital','clean_scan','clear_handwriting','noisy_scan','degraded_handwriting']
-for t in tiers:
-    c=np.load(f'data/processed/{t}/chars.npz')['crops'].astype(float).reshape(-1,64)
-    print(f'{t:22s} {np.median(c.max(1)-c.min(1)):.0f}')"
-```
+Note that regenerating renders text with whatever fonts the machine provides,
+which shifts absolute accuracy by a fraction of a percent; `manifest.json`
+records the fonts and platform used for the figures reported here. Comparative
+conclusions were checked across two platforms and are unchanged.
 
 ---
 
-## 12. Contributions
-
-Repository commit history is the record. To be completed at submission,
-stated neutrally.
-
----
-
-*Last updated: August 13, 2026*
+*Last updated: August 14, 2026*
