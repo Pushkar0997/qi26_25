@@ -74,6 +74,11 @@ def main():
     args = ap.parse_args()
 
     X, y = load_all()
+
+    # Per-crop contrast normalisation, exactly as the benchmark does it.
+    # Omitting this changes the result enough to reverse the headline finding,
+    # because the degraded tiers compress into a narrow intensity band without
+    # it and every extractor is then measured on different inputs.
     Xn = normalize_crops(X)
     print("crops: {}, classes: {}".format(X.shape, len(np.unique(y))))
 
@@ -89,6 +94,9 @@ def main():
 
     scores = {k: [] for k in feats}
     print("\nrunning {} splits ...".format(args.seeds))
+
+    # Seeds 0..n-1 rather than random draws, so the sweep is reproducible and a
+    # reviewer re-running it lands on the same splits.
     for s in range(args.seeds):
         for name, F in feats.items():
             a, b, c, d = train_test_split(F, y, test_size=0.25,
@@ -112,6 +120,9 @@ def main():
 
     # The two comparisons the report's conclusions actually rest on.
     print("\npaired comparisons across the same {} splits:".format(args.seeds))
+    # Only the comparisons the report's conclusions depend on. Testing every
+    # pair would invite multiple-comparison problems for no benefit: three of
+    # the six pairs are not claims the report makes.
     comparisons = [
         ("quanv (+ZZ corr)", "classical conv"),
         ("raw pixels", "quanv (+ZZ corr)"),

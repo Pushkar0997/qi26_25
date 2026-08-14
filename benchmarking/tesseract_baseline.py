@@ -94,6 +94,9 @@ def main():
     for tier in TIERS:
         q_cer, t_cer, q_id, t_id = [], [], [], []
 
+        # Both systems see the identical image file. Tesseract is given the
+        # original PNG rather than the binarised or cropped intermediates, since
+        # its own preprocessing is part of what is being compared.
         for f in sorted((ROOT / "data/processed" / tier).glob("doc_*.png")):
             meta = json.loads(f.with_suffix(".json").read_text())
             truth = meta["text"]
@@ -106,6 +109,8 @@ def main():
             crops = P.crops_from_boxes(arr, boxes)
             qtext = P.assemble_text(boxes, P.predict_chars(
                 crops, coef, intercept, classes))
+            # Same CER function for both, so the comparison is like for like
+            # even though the two systems reach their text very differently.
             q_cer.append(P.cer(qtext, truth))
             q_id.append(1.0 if P._locate_id_field(qtext) == true_hex else 0.0)
 

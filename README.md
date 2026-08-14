@@ -111,7 +111,7 @@ Run one document end to end:
 python integration/pipeline.py --doc data/processed/clean_scan/doc_000.png --pattern 38
 ```
 
-**Do not regenerate the dataset unless you intend to change it.** Generation
+**The dataset should not be regenerated except to change it deliberately.** Generation
 renders text with whatever fonts the machine provides, and different fonts
 change segmentation: on a machine with thinner glyph rendering, clean-document
 character error rose from 6.5% to 63.7% in testing. The generator refuses to
