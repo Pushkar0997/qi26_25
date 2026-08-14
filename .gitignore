@@ -26,7 +26,7 @@ data/raw/*
 
 # Trained OCR backend — build artifact, regenerate with:
 #   python integration/pipeline.py --train
-integration/ocr_backend.npz
+# Check the commit for reason for removal
 
 # Benchmark outputs ARE committed (results.json / results.md) — they are the
 # evidence behind the report and must be reviewable without running anything.
