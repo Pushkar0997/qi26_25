@@ -77,16 +77,35 @@ class Alphabet:
     """
 
     def __init__(self, symbols):
-        symbols = list(dict.fromkeys(symbols))  # dedupe, preserve order
+        # dict.fromkeys removes duplicates while preserving first-seen order,
+        # so Alphabet("AABC") and Alphabet("ABC") produce identical encodings.
+        # Order stability matters: the codes end up baked into circuits, and a
+        # reordered alphabet would silently change every gate.
+        symbols = list(dict.fromkeys(symbols))
         self.symbols = symbols
+
+        # Width in bits. The "+ 1" reserves code 0 as unused (see class
+        # docstring), so an N-symbol alphabet must address N+1 values.
+        # 4 symbols -> codes 1..4 -> needs 3 bits, not 2.
         self.bits = max(1, int(np.ceil(np.log2(len(symbols) + 1))))
+
+        # code:   character -> integer, starting at 1
+        # decode: integer -> character, for reading measurement results back
         self.code = {s: i + 1 for i, s in enumerate(symbols)}
         self.decode = {v: k for k, v in self.code.items()}
+
         if len(symbols) + 1 > 2 ** self.bits:
             raise ValueError("alphabet too large for {} bits".format(self.bits))
 
     def to_bits(self, ch):
-        """Character -> list of bits, MSB first."""
+        """Character -> list of bits, MSB first.
+
+        MSB-first ordering is a convention chosen once and then relied on
+        everywhere: window loading, pattern XOR, and measurement decoding all
+        assume it. Flipping it would still "work" in the sense that matches
+        would be found, because both sides of the comparison would flip
+        together -- but decoded characters would come out scrambled.
+        """
         return [int(b) for b in format(self.code[ch], "0{}b".format(self.bits))]
 
     def __len__(self):
@@ -104,15 +123,28 @@ def build_comparator_oracle(text, pattern, alphabet, n_pos=None):
     """Return (oracle circuit, n_pos, n_win) for marking positions where
     text[i:i+M] == pattern. The oracle never receives the match positions."""
     N, M = len(text), len(pattern)
+
+    # Candidate start positions: a pattern of length M can begin anywhere from
+    # index 0 up to N-M inclusive, so N-M+1 possibilities.
     n_cand = N - M + 1
     if n_cand < 1:
         raise ValueError("pattern longer than text")
+
+    # Position register width. Note this rounds UP to a power of two, so when
+    # n_cand is not itself a power of two the register addresses more states
+    # than there are valid positions. Those extra states are unreachable
+    # padding -- they never trigger a controlled load, so their window stays
+    # at all-zeros. This is exactly why alphabet codes start at 1: if any
+    # character encoded to zero, the padding would look like a match.
     if n_pos is None:
         n_pos = max(1, int(np.ceil(np.log2(n_cand))))
 
     b = alphabet.bits
-    n_win = M * b
+    n_win = M * b          # M characters, b bits each, laid out end to end
 
+    # Two registers, no ancillas. The window register doubles as the comparison
+    # workspace and as the target of the phase flip, which is what keeps the
+    # qubit count down.
     pos = QuantumRegister(n_pos, "pos")
     win = QuantumRegister(n_win, "win")
     qc = QuantumCircuit(pos, win, name="comparator_oracle")
@@ -121,20 +153,54 @@ def build_comparator_oracle(text, pattern, alphabet, n_pos=None):
     _load_window(qc, pos, win, text, M, alphabet, n_pos, n_cand)
 
     # ---- Stage 2: XOR the pattern in --------------------------------------
+    # The pattern is CLASSICAL and known at circuit-build time, so XOR-ing it in
+    # needs no controls at all -- just an X on each bit position where the
+    # pattern has a 1. Applying X to a qubit flips it, and flipping window bit j
+    # exactly when pattern bit j is 1 computes (window XOR pattern) in place.
+    #
+    # The point of the XOR: after it, the window register is all-zeros if and
+    # only if the window equalled the pattern. That converts "are these two
+    # strings equal?" into "is this register all zeros?", which is a condition a
+    # single multi-controlled gate can test.
     pattern_bits = [bit for ch in pattern for bit in alphabet.to_bits(ch)]
     for j, bit in enumerate(pattern_bits):
         if bit == 1:
             qc.x(win[j])
 
     # ---- Stage 3: phase-flip when win is all zeros ------------------------
+    # Multi-controlled gates trigger on all-ONES, but we need to detect
+    # all-ZEROS. The standard trick is to sandwich the gate between layers of X:
+    # flip everything, so all-zeros becomes all-ones, test it, then flip back.
     qc.x(win)
     if n_win == 1:
+        # A one-qubit "multi-controlled phase" has no controls left -- it is
+        # just Z, which applies the -1 phase to |1>.
         qc.z(win[0])
     else:
+        # mcp(pi, controls, target) applies phase e^{i*pi} = -1 when every
+        # control AND the target are |1>. The choice of which qubit acts as
+        # "target" is arbitrary: the phase is global to that basis state, so
+        # any partition of the register into controls plus one target gives the
+        # same operator.
         qc.mcp(np.pi, [win[k] for k in range(n_win - 1)], win[n_win - 1])
     qc.x(win)
 
     # ---- Stage 4: uncompute ----------------------------------------------
+    # Reverse stages 2 and 1, in that order. Both are built purely from X and
+    # multi-controlled X gates, each of which is its own inverse, so "reversing"
+    # means simply applying the same operations again.
+    #
+    # Why this is mandatory rather than tidy: after stage 1 the window register
+    # is ENTANGLED with the position register (|i> is paired with the text at
+    # position i). The phase flip from stage 3 is attached to that joint state.
+    # If we stopped here and applied the diffusion operator to `pos` alone, the
+    # window would act as a which-path record -- the amplitudes could not
+    # interfere, and Grover would not amplify anything.
+    #
+    # Uncomputing returns the window to |0> for every branch, disentangling it.
+    # The phase then belongs to `pos` alone and interference works.
+    # check_phase() measures the leftover entanglement as "leakage"; it should
+    # be exactly 0.
     for j, bit in enumerate(pattern_bits):
         if bit == 1:
             qc.x(win[j])
@@ -150,12 +216,33 @@ def _load_window(qc, pos, win, text, M, alphabet, n_pos, n_cand):
     same routine serves as both the compute and uncompute step.
     """
     b = alphabet.bits
+
+    # One pass per candidate position. This loop is the whole reason the oracle
+    # costs O(N) gates rather than O(1): the text is classical data that has to
+    # be written into the circuit, position by position. It is the source of the
+    # measured 1.39 scaling exponent, and the reason Grover's sqrt(N) query
+    # advantage does not survive here.
     for i in range(n_cand):
+        # The M characters starting at position i, flattened to a bit list.
+        # This is evaluated in PYTHON at build time -- which is fine, and is not
+        # the same as precomputing the answer. We are writing the text into the
+        # circuit, not comparing it. The comparison happens in superposition,
+        # later, in stage 2/3.
         window_bits = [bit for ch in text[i:i + M] for bit in alphabet.to_bits(ch)]
-        # ctrl_state selects the basis state pos == i. Qiskit reads ctrl_state
-        # little-endian across the control list, matching pos[0] as LSB.
+
         for j, bit in enumerate(window_bits):
             if bit == 1:
+                # Write a 1 into window bit j, but only on the branch where the
+                # position register holds i.
+                #
+                # ctrl_state=i makes the gate fire on the basis state |i>
+                # instead of the default all-ones. Qiskit reads ctrl_state
+                # little-endian across the control list, which matches pos[0]
+                # being the least significant bit -- so passing the integer i
+                # directly is correct with no bit reversal.
+                #
+                # Bits that are 0 need no gate: the window starts at |0>, so
+                # "write a 0" is a no-op. That halves the gate count on average.
                 qc.append(XGate().control(n_pos, ctrl_state=i),
                           list(pos) + [win[j]])
 
@@ -163,6 +250,21 @@ def _load_window(qc, pos, win, text, M, alphabet, n_pos, n_cand):
 def build_diffusion(n_qubits):
     """Grover diffusion operator: reflection about the uniform superposition."""
     qc = QuantumCircuit(n_qubits, name="diffusion")
+
+    # The diffusion operator is 2|s><s| - I, a reflection about the uniform
+    # superposition |s>. It is built by mapping |s> to |0...0>, reflecting about
+    # |0...0>, then mapping back:
+    #
+    #   H layer  : |s> -> |0...0>            (undoes the initial superposition)
+    #   X layer  : |0...0> -> |1...1>        (so a multi-controlled gate can see it)
+    #   MCZ      : flip the phase of |1...1> (the reflection itself)
+    #   X layer  : undo
+    #   H layer  : undo
+    #
+    # Combined with the oracle's reflection about the marked states, each
+    # oracle+diffusion pair rotates the state vector toward the answer by a
+    # fixed angle -- which is why the iteration count is a fixed optimum rather
+    # than "more is better", and why over-rotation is possible.
     qc.h(range(n_qubits))
     qc.x(range(n_qubits))
     if n_qubits == 1:

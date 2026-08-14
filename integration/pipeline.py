@@ -47,11 +47,21 @@ CROP = 8
 # --------------------------------------------------------------------------
 
 def binarize(arr):
-    """Otsu threshold. Returns a boolean ink mask (True = ink)."""
+    """Otsu threshold. Returns a boolean ink mask (True = ink).
+
+    Otsu picks the intensity cut that maximises BETWEEN-CLASS variance -- i.e.
+    the split that separates dark and light pixels most decisively. It is used
+    here rather than a fixed threshold because the five quality tiers differ
+    enormously in overall brightness, and any constant would fail on at least
+    one of them (the degraded tiers are washed out toward mid-grey).
+    """
     hist, _ = np.histogram(arr, bins=256, range=(0, 256))
     total = arr.size
-    sum_all = np.dot(np.arange(256), hist)
-    sum_b = w_b = 0.0
+    sum_all = np.dot(np.arange(256), hist)   # sum of all pixel intensities
+
+    # Sweep every possible threshold, tracking the running statistics of the
+    # "background" class (pixels <= t) so each step is O(1) rather than O(n).
+    sum_b = w_b = 0.0          # weight and intensity-sum of the dark class
     best_t, best_var = 128, -1.0
     for t in range(256):
         w_b += hist[t]
@@ -61,12 +71,16 @@ def binarize(arr):
         if w_f == 0:
             break
         sum_b += t * hist[t]
-        m_b = sum_b / w_b
-        m_f = (sum_all - sum_b) / w_f
+        m_b = sum_b / w_b                        # mean intensity, dark class
+        m_f = (sum_all - sum_b) / w_f            # mean intensity, light class
+
+        # Between-class variance. Maximising this is equivalent to minimising
+        # the weighted within-class variance, but far cheaper to compute.
         var = w_b * w_f * (m_b - m_f) ** 2
         if var > best_var:
             best_var, best_t = var, t
-    return arr <= best_t          # ink is dark
+
+    return arr <= best_t          # ink is dark on light paper
 
 
 def clean_ink(ink, min_component=6):
@@ -78,10 +92,22 @@ def clean_ink(ink, min_component=6):
     'line'. Size filtering removes them without touching real glyphs.
     """
     from scipy import ndimage
+
+    # NOTE: ndimage.label defaults to 4-CONNECTIVITY (a cross-shaped structuring
+    # element), so diagonally touching pixels form separate components. The
+    # browser port of this pipeline used 8-connectivity by mistake, which merged
+    # a speckle into a glyph, changed which blobs survived the size filter, and
+    # shifted one bounding box by a pixel -- producing a different decoded
+    # character. Keep this default unless you change web/pipeline.js to match.
     lab, n = ndimage.label(ink)
     if n == 0:
         return ink
+
+    # Pixel count per component. Labels run 1..n; 0 is background.
     sizes = ndimage.sum(ink, lab, range(1, n + 1))
+
+    # Build a lookup table (label -> keep?) and index the label image with it.
+    # This is vastly faster than testing components in a Python loop.
     keep = np.zeros(n + 1, dtype=bool)
     keep[1:] = sizes >= min_component
     return keep[lab]
@@ -108,29 +134,41 @@ def segment_characters(arr, min_ink=4):
     # Adaptive row threshold: a real text line marks a meaningful fraction of
     # the page width. A fixed '>1 pixel' test is what let residual noise turn
     # the whole page into a single line on the degraded tiers.
+    # Horizontal projection: how much ink is in each row of the page.
     row_ink = ink.sum(axis=1)
     row_active = row_ink > max(2, int(0.008 * ink.shape[1]))
+
+    # Walk down the page collecting maximal runs of active rows -- each run is
+    # one text line. The `>= 4` guard discards runs too short to be text, which
+    # would otherwise appear from residual noise or descenders.
     lines, start = [], None
     for y, a in enumerate(row_active):
         if a and start is None:
-            start = y
+            start = y                    # a line begins
         elif not a and start is not None:
             if y - start >= 4:
-                lines.append((start, y))
+                lines.append((start, y))  # a line ends
             start = None
     if start is not None and len(row_active) - start >= 4:
         lines.append((start, len(row_active)))
 
+    # Within each line, do the same thing vertically: sum ink down each column
+    # and treat runs of blank columns as character separators.
     for li, (y0, y1) in enumerate(lines):
         band = ink[y0:y1]
         col_ink = band.sum(axis=0)
         col_active = col_ink > 0
-        cs = None
+        cs = None            # column where the current character started
         for x, a in enumerate(col_active):
             if a and cs is None:
                 cs = x
             elif not a and cs is not None:
+                # Reject slivers: a real glyph needs both enough ink and enough
+                # width. Without this, single stray columns become "characters".
                 if band[:, cs:x].sum() >= min_ink and (x - cs) >= 2:
+                    # Tighten the box vertically to the rows that actually
+                    # contain ink, so a lowercase letter does not inherit the
+                    # full line height. +1 because slice ends are exclusive.
                     ys = np.where(band[:, cs:x].any(axis=1))[0]
                     boxes.append((li, cs, y0 + ys.min(), x, y0 + ys.max() + 1))
                 cs = None
@@ -168,16 +206,24 @@ def split_wide_boxes(boxes, ink, ratio=1.8, valley_frac=0.45):
             out.append((li, x0, y0, x1, y1))
             continue
 
+        # Ink profile across the suspiciously wide box. A genuine merge of two
+        # glyphs shows a dip where they touch; a legitimately wide character
+        # like 'M' does not.
         col = ink[y0:y1, x0:x1].sum(axis=0).astype(float)
         if col.size < 6 or col.mean() <= 0:
             out.append((li, x0, y0, x1, y1))
             continue
 
+        # Do not cut near the edges -- a stroke ending is not a valley.
         margin = max(2, int(0.25 * ref))
         cuts = []
         for c in range(margin, len(col) - margin):
+            # Two conditions, both required:
+            #   1. the column is well below average ink (a real dip, not noise)
+            #   2. it is a local minimum over a 5-column window
             if col[c] < valley_frac * col.mean() and \
                col[c] <= col[max(0, c - 2):c + 3].min():
+                # Enforce spacing so one wide valley yields one cut, not five.
                 if not cuts or c - cuts[-1] >= margin:
                     cuts.append(c)
 
@@ -354,13 +400,25 @@ def assemble_text(boxes, chars, space_gap=1.6):
 
 def cer(pred, truth):
     """Character error rate via Levenshtein distance, normalised by truth length."""
+    # Newlines are stripped so that a line-break difference does not count as
+    # an error -- we are measuring character recognition, not layout.
     p, t = pred.replace("\n", ""), truth.replace("\n", "")
+
+    # Standard Levenshtein with a rolling row: prev[j] is the edit distance
+    # between the first i-1 predicted chars and the first j truth chars.
+    # Only two rows are ever needed, so memory is O(len(t)) not O(n*m).
     prev = list(range(len(t) + 1))
     for i, pc in enumerate(p, 1):
-        cur = [i]
+        cur = [i]                                    # cost of i deletions
         for j, tc in enumerate(t, 1):
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (pc != tc)))
+            cur.append(min(prev[j] + 1,              # deletion
+                           cur[j - 1] + 1,           # insertion
+                           prev[j - 1] + (pc != tc)))  # substitution / match
         prev = cur
+
+    # Normalise by TRUTH length, so CER is comparable across documents.
+    # Note this means CER can exceed 100% if the pipeline inserts spuriously --
+    # which is exactly what happened when equal-width box splitting was tried.
     return prev[-1] / max(1, len(t))
 
 

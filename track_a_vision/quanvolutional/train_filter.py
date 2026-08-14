@@ -69,16 +69,39 @@ def load_all():
 
 
 def ridge_head(Ftr, Ytr, Fva, yva, lam=1e-2):
-    """Closed-form one-hot least squares. Returns validation accuracy."""
+    """Closed-form one-hot least squares. Returns validation accuracy.
+
+    Why closed form rather than a proper classifier: this runs INSIDE the angle
+    search, once per objective evaluation. Fitting a stochastic model here would
+    put an optimiser inside an optimiser -- run-to-run noise in the inner fit
+    would be indistinguishable from a genuine difference between candidate angle
+    vectors, and the outer search would chase that noise. A closed-form solution
+    is deterministic, so any change in the objective is attributable to the
+    angles alone.
+
+    The final reported numbers use the same LogisticRegression head as the main
+    benchmark; this cheaper head is only a search signal.
+    """
+    # Append a column of ones so the bias term is learned along with the weights.
     A = np.hstack([Ftr, np.ones((len(Ftr), 1))])
+
+    # Ridge-regularised normal equations: W = (A'A + lam*I)^-1 A'Y.
+    # The lam*I term also guarantees the matrix is invertible, which matters
+    # because feature columns can be near-collinear at some angle settings.
     G = A.T @ A + lam * np.eye(A.shape[1])
     W = np.linalg.solve(G, A.T @ Ytr)
+
+    # One-hot regression turns classification into least squares: predict a
+    # vector per sample and take the largest component as the class.
     P = np.hstack([Fva, np.ones((len(Fva), 1))]) @ W
     return float((P.argmax(1) == yva).mean())
 
 
 def make_objective(kind, Xtr, Ytr_oh, Xva, yva_idx, n_qubits, depth, calls):
     def obj(theta):
+        # Powell minimises, so the objective returns NEGATIVE accuracy.
+        # Features are recomputed from scratch each call because theta changes
+        # the filter unitary itself -- there is nothing cacheable here.
         if kind == "quantum":
             Ftr = quanv_features(Xtr, correlations=True, angles=theta,
                                  n_qubits=n_qubits, depth=depth)
@@ -127,6 +150,12 @@ def main():
     yi = np.array([cls_idx[c] for c in y])
 
     # ---- SEALED TEST PARTITION -------------------------------------------
+    # This split is the single most important line in the file. An earlier
+    # version searched angles over the whole dataset and then evaluated on a
+    # fresh random split of that SAME dataset, so the search had already seen
+    # the test rows. That reported a +1.4 point gain from training. With the
+    # leak removed the gain is +0.1 -- i.e. the entire headline result was an
+    # artifact of the evaluation protocol.
     # Split once, stratified. The angle search never sees Xte. Every number
     # reported as "final" is measured on Xte only.
     idx = np.arange(len(Xn))
@@ -150,6 +179,9 @@ def main():
 
     # ---- baselines, untrained -------------------------------------------
     print("Baselines (untrained), full dataset, LogisticRegression head:")
+    # Start the search from EXACTLY the untrained filter's angles, so any
+    # improvement is attributable to optimisation rather than to a luckier
+    # random initialisation.
     theta0_q = initial_angles(args.n_qubits, seed=42, depth=args.depth)
     base_q = evaluate_final(quanv_features(Xsearch, correlations=True), ysearch,
                             quanv_features(Xte, correlations=True), yte)
@@ -170,12 +202,20 @@ def main():
 
     # ---- train both ------------------------------------------------------
     trained = {}
+    # Train BOTH filters with the same optimiser, budget and data. Training only
+    # the quantum side would invert the exact unfairness that the untrained
+    # comparison in benchmark experiment A was designed to avoid.
     for kind, theta0 in [("quantum", theta0_q), ("classical", theta0_c)]:
         calls = []
         t0 = time.time()
         obj = make_objective(kind, Xtr, Ytr_oh, Xva, yva,
                              args.n_qubits, args.depth, calls)
         start = -obj(theta0)
+        # Powell: a gradient-free direction-set method. Chosen because the
+        # objective (validation ACCURACY) is a step function -- it changes only
+        # when a sample crosses a decision boundary -- so it has no useful
+        # gradient anywhere. Parameter-shift gradients would work on a smooth
+        # loss, and are the better approach if this is revisited.
         res = minimize(obj, theta0, method="Powell",
                        options={"maxfev": args.budget, "xtol": 1e-2,
                                 "ftol": 1e-3})

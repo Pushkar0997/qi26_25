@@ -37,15 +37,35 @@ from qiskit.quantum_info import Operator
 # --------------------------------------------------------------------------
 
 def random_entangling_circuit(n_qubits, seed=42, depth=2):
-    """The Track A filter, unchanged from quanvolutional_starter.ipynb."""
+    """The Track A filter, unchanged from quanvolutional_starter.ipynb.
+
+    Architecture: alternating layers of single-qubit RY rotations and a ring of
+    CX gates. The rotations are drawn once from a seeded RNG and then held
+    FIXED -- this is the "untrained random" quanvolutional filter of Henderson
+    et al., not a variational circuit. train_filter.py replaces these angles
+    with optimised ones and measures whether it helps (it does not).
+
+    Two design points worth knowing:
+
+    - Rotations alone would be useless. Without the CX gates the circuit acts
+      independently on each qubit, so the output would be a deterministic
+      function of each pixel separately -- no interaction between pixels, which
+      is the entire point of a convolution.
+    - The ring closure (last qubit back to qubit 0) is what lets information
+      reach every qubit within one layer. A plain chain would leave qubit 0
+      unable to influence qubit n-1 until the second layer.
+    """
     rng = np.random.default_rng(seed)
     qc = QuantumCircuit(n_qubits)
     for _ in range(depth):
+        # Rotation layer: one arbitrary Y-rotation per qubit.
         for q in range(n_qubits):
             qc.ry(rng.uniform(0, 2 * np.pi), q)
+        # Entangling layer: nearest-neighbour chain ...
         for q in range(n_qubits - 1):
             qc.cx(q, q + 1)
-        qc.cx(n_qubits - 1, 0)   # ring entanglement
+        # ... closed into a ring.
+        qc.cx(n_qubits - 1, 0)
     return qc
 
 
@@ -96,13 +116,32 @@ def _encode_batch(patches):
     patches = np.asarray(patches, dtype=float)
     n = patches.shape[0]
     flat = patches.reshape(n, -1)
+
+    # Map pixel intensity to a rotation angle. A black pixel (0) gives theta=0,
+    # leaving the qubit at |0>; a white pixel (255) gives theta=pi, rotating it
+    # all the way to |1>. Everything between interpolates smoothly.
     theta = np.pi * (flat / 255.0)
+
+    # RY(theta)|0> = cos(theta/2)|0> + sin(theta/2)|1>. The half-angle is not a
+    # typo: rotations on the Bloch sphere are double-covered by SU(2), so a
+    # pi rotation of the state corresponds to theta/2 = pi/2 in the amplitudes.
     c, s = np.cos(theta / 2), np.sin(theta / 2)
 
+    # Build the joint state as a Kronecker product. This is only valid because
+    # the encoding touches each qubit independently -- the input is a PRODUCT
+    # state with no entanglement. (All entanglement in the output comes from
+    # the filter's CX gates, applied afterwards.)
+    #
+    # The loop runs from the highest qubit DOWN because Qiskit is little-endian:
+    # qubit 0 is the least significant bit of the basis-state index, so it must
+    # be the last factor in the product. Getting this backwards produces a
+    # perfectly plausible-looking but silently wrong feature map.
     n_qubits = flat.shape[1]
     state = np.ones((n, 1), dtype=complex)
-    for q in range(n_qubits - 1, -1, -1):          # little-endian ordering
-        qubit = np.stack([c[:, q], s[:, q]], axis=1)
+    for q in range(n_qubits - 1, -1, -1):
+        qubit = np.stack([c[:, q], s[:, q]], axis=1)     # (n, 2)
+        # Outer product against the running state, flattened back to a vector.
+        # Shapes: (n, D, 1) * (n, 1, 2) -> (n, D, 2) -> (n, 2D)
         state = (state[:, :, None] * qubit[:, None, :]).reshape(n, -1)
     return state
 
@@ -113,24 +152,46 @@ def quanv_patch_probs(patches, n_qubits=4, seed=42, depth=2, shots=None, rng=Non
 
     Output width is n_qubits, or n_qubits + C(n_qubits, 2) when correlations
     are enabled."""
+    # The filter is a fixed circuit, so it is a single unitary matrix. Extract
+    # it once and reuse it for every patch -- this is what turns a per-patch
+    # simulation into one batched matrix multiply.
     U = (_unitary_from_angles(angles, n_qubits, depth) if angles is not None
          else _filter_unitary(n_qubits, seed, depth))
+
+    # Apply the circuit: |psi_out> = U |psi_in>, batched over patches.
+    # U.T rather than U because the states are stored as ROW vectors here
+    # (shape (n, 2**q)), so the matmul is psi @ U^T rather than U @ psi.
     states = _encode_batch(patches) @ U.T
+
+    # Born rule: probability of each measurement outcome is |amplitude|^2.
     probs = np.abs(states) ** 2                     # (n, 2**n_qubits)
 
     if shots is not None:
-        # Reintroduce measurement noise by sampling the exact distribution.
+        # Optionally reintroduce shot noise. A real device cannot read
+        # probabilities off directly -- it samples, so each estimate carries
+        # error of order 1/sqrt(shots).
+        #
+        # Drawing from the exact distribution with a multinomial is
+        # statistically identical to running the circuit `shots` times and
+        # counting, but avoids the simulator entirely. Used by benchmark
+        # experiment E to measure how many shots hardware would actually need.
         rng = rng or np.random.default_rng(0)
         sampled = np.empty_like(probs)
         for i in range(probs.shape[0]):
-            p = np.clip(probs[i], 0, None)
+            p = np.clip(probs[i], 0, None)          # guard tiny negatives
             sampled[i] = rng.multinomial(shots, p / p.sum()) / shots
         probs = sampled
 
     # Marginalise: qubit q is bit q of the outcome index (little-endian).
+    # bits[q, k] is the value of qubit q in basis state k. Built by shifting the
+    # state index right by q and masking -- the little-endian convention again,
+    # matching how Qiskit numbers basis states.
     idx = np.arange(probs.shape[1])
     bits = np.stack([(idx >> q) & 1 for q in range(n_qubits)], axis=0)  # (nq, 2**nq)
 
+    # Single-qubit marginals: P(qubit q measures 1) is the total probability of
+    # every basis state in which bit q is set. This is what a real device would
+    # report if you measured each qubit and counted ones.
     out = [probs[:, bits[q] == 1].sum(axis=1) for q in range(n_qubits)]
 
     if correlations:
@@ -139,7 +200,19 @@ def quanv_patch_probs(patches, n_qubits=4, seed=42, depth=2, shots=None, rng=Non
         # only n marginals throws most of it away. <Z_i Z_j> recovers the
         # pairwise structure, which is the part of the output that a product
         # state could not have produced.
-        z = 1.0 - 2.0 * bits                      # map bit 0/1 -> +1/-1
+        # Pauli-Z eigenvalues: bit 0 -> +1, bit 1 -> -1.
+        z = 1.0 - 2.0 * bits
+
+        # <Z_i Z_j> = sum_k P(k) * z_i(k) * z_j(k), the expectation of the
+        # product. Interpretation:
+        #   +1  qubits i and j always agree
+        #   -1  they always disagree
+        #    0  uncorrelated
+        #
+        # Only pairs i<j, since <Z_i Z_j> = <Z_j Z_i> and <Z_i Z_i> = 1 always.
+        # For 4 qubits that is C(4,2) = 6 extra numbers, taking the readout from
+        # 4 values to 10 -- measured in benchmark experiment A as worth about
+        # 4.6 accuracy points, a bigger effect than any filter change.
         for i in range(n_qubits):
             for j in range(i + 1, n_qubits):
                 out.append((probs * (z[i] * z[j])).sum(axis=1))
@@ -155,13 +228,20 @@ def quanv_features(images, patch_size=2, n_qubits=4, seed=42, depth=2,
     """
     images = np.asarray(images, dtype=float)
     if images.ndim == 2:
-        images = images[None, ...]
+        images = images[None, ...]                  # accept a single image
     n, H, W = images.shape
+
+    # Default stride == patch_size means non-overlapping patches, so an 8x8
+    # crop yields a 4x4 grid of 2x2 patches (16 total). stride=1 would overlap
+    # them, giving 49 patches and a much wider feature vector.
     stride = stride or patch_size
     out_h = (H - patch_size) // stride + 1
     out_w = (W - patch_size) // stride + 1
 
-    # Collect every patch from every image, run one batched pass, reshape back.
+    # Collect EVERY patch from EVERY image into one big array first, so the
+    # quantum stage runs as a single batched matmul rather than once per patch.
+    # Patches are grouped by position (all images' top-left patch, then all
+    # images' next patch, ...) which is what the reshape at the end unwinds.
     patches = np.empty((n * out_h * out_w, patch_size * patch_size))
     k = 0
     for oy in range(out_h):
@@ -174,6 +254,9 @@ def quanv_features(images, patch_size=2, n_qubits=4, seed=42, depth=2,
     probs = quanv_patch_probs(patches, n_qubits=n_qubits, seed=seed,
                               depth=depth, shots=shots,
                               correlations=correlations, angles=angles)
+    # Unwind the grouping: (positions, images, readouts) -> (images, positions,
+    # readouts) -> flat feature vector per image. The transpose is essential;
+    # reshaping without it interleaves different images' features.
     n_feat = probs.shape[1]
     probs = probs.reshape(out_h * out_w, n, n_feat)
     return probs.transpose(1, 0, 2).reshape(n, -1)
@@ -199,6 +282,8 @@ def classical_conv(images, patch_size=2, n_filters=4, seed=42, stride=None):
     out_h = (H - patch_size) // stride + 1
     out_w = (W - patch_size) // stride + 1
 
+    # Random untrained filters, matching the quantum side's "fixed random"
+    # character. Gaussian weights are the standard initialisation.
     rng = np.random.default_rng(seed)
     filters = rng.normal(0, 1, (n_filters, patch_size * patch_size))
 
@@ -208,7 +293,12 @@ def classical_conv(images, patch_size=2, n_filters=4, seed=42, stride=None):
         for ox in range(out_w):
             y, x = oy * stride, ox * stride
             block = images[:, y:y + patch_size, x:x + patch_size].reshape(n, -1)
-            feats[:, k, :] = np.tanh(block @ filters.T)   # bounded, like probs
+            # tanh bounds the output to (-1, 1), matching the range of the
+            # quantum readout (probabilities in [0,1], correlations in [-1,1]).
+            # Without it the classical features would have unbounded scale and
+            # the comparison would partly measure feature scaling rather than
+            # feature quality.
+            feats[:, k, :] = np.tanh(block @ filters.T)
             k += 1
     return feats.reshape(n, -1)
 
