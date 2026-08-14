@@ -59,6 +59,23 @@ filter unitary from this repo, and  asserts stage-by-stage
 that it produces byte-identical output to the Python pipeline (features agree to
 5.6e-16; decoded text is identical).
 
+## Notebooks
+
+Six runnable notebooks in `notebooks/`, in order. Each is self-contained: the
+first cell clones this repo and installs dependencies if needed, so they open
+directly in Colab with no setup.
+
+| Notebook | Contents |
+|---|---|
+| `00_start_here` | Environment, dataset, one full pipeline run |
+| `01_encoding_frqi_neqr` | Pixels to quantum states; the refuted Week 1 hypothesis |
+| `02_quanvolutional_features` | The quantum feature extractor and why it loses to raw pixels |
+| `03_grover_comparator` | A real string-matching oracle; why sqrt(N) does not survive |
+| `04_full_pipeline` | All nine stages in detail, plus the two bugs that cost most |
+| `05_noise_and_runtimes` | Shot/gate/readout noise, GPU, simulation limits |
+
+Total 162 cells, all executed with outputs saved.
+
 ## Quick start
 
 ```bash
