@@ -41,7 +41,7 @@ The results are largely negative, and deliberately reported as such:
   measured exponent of **1.39** in text length, so the √N query advantage does
   not survive data loading for stored classical text.
 - Measured over 30 splits, quantum-vs-classical parity is a **null result**
-  (p=0.30, 14/30 splits won) while the raw-pixel lead is real (p=5e-12, 30/30).
+  (p=0.23, 15/30 splits won) while the raw-pixel lead is real (p=6e-12, 30/30).
 - Against **Tesseract** on the same images, this pipeline is 3-4x worse on clean
   input (6.6% vs 2.0% character error). It is not competitive with mature
   classical OCR; the contribution is the measured characterisation of why.

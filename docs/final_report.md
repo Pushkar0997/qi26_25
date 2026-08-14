@@ -230,21 +230,21 @@ extractor scored on the same splits so the comparison is paired
 
 | Extractor | Mean | Std | 95% interval |
 |---|---|---|---|
-| quanv (marginals) | 87.1% | 0.7 | [85.4, 88.0] |
+| quanv (marginals) | 87.1% | 0.7 | [85.5, 88.2] |
 | quanv (+ZZ) | 92.8% | 0.7 | [91.5, 94.0] |
-| classical conv | 92.9% | 0.6 | [91.8, 93.9] |
+| classical conv | 93.0% | 0.6 | [91.9, 94.0] |
 | raw pixels | **94.1%** | 0.6 | [92.7, 95.0] |
 
 | Comparison | Mean difference | p | Splits won | Verdict |
 |---|---|---|---|---|
-| quanv (+ZZ) − classical conv | −0.10 pt | 0.30 | 14 / 30 | not distinguishable from noise |
-| raw pixels − quanv (+ZZ) | +1.24 pt | 5×10⁻¹² | 30 / 30 | significant |
-| raw pixels − classical conv | +1.14 pt | 2×10⁻¹⁴ | 30 / 30 | significant |
-| quanv (+ZZ) − quanv (marginals) | +5.74 pt | 4×10⁻²⁸ | 30 / 30 | significant |
+| quanv (+ZZ) − classical conv | −0.12 pt | 0.23 | 15 / 30 | not distinguishable from noise |
+| raw pixels − quanv (+ZZ) | +1.24 pt | 6×10⁻¹² | 30 / 30 | significant |
+| raw pixels − classical conv | +1.13 pt | 3×10⁻¹⁴ | 30 / 30 | significant |
+| quanv (+ZZ) − quanv (marginals) | +5.75 pt | 1×10⁻²⁷ | 30 / 30 | significant |
 
 This separates two claims that the single-split table presents identically. The
-quantum-versus-classical gap is noise: the quantum layer wins 14 splits out of
-30, which is what a coin flip looks like. The raw-pixel lead is not: it holds in
+quantum-versus-classical gap is noise: the quantum layer wins 15 splits out of
+30, which is exactly what a coin flip looks like. The raw-pixel lead is not: it holds in
 every one of 30 splits. The report's two central conclusions — parity with the
 classical control, and both losing to raw pixels — therefore rest on
 measurements of different strength, and only the second is a real effect.
@@ -414,9 +414,9 @@ error function (`benchmarking/tesseract_baseline.py`):
 | Tier | This pipeline CER | Tesseract CER | This pipeline ID | Tesseract ID |
 |---|---|---|---|---|
 | clean_digital | 6.6% | **2.0%** | **100%** | 92% |
-| clean_scan | 8.5% | **2.0%** | 58% | **75%** |
+| clean_scan | 8.5% | **1.9%** | 58% | **83%** |
 | noisy_scan | **79.5%** | 100.0% | 0% | 0% |
-| clear_handwriting | 51.8% | **19.8%** | 0% | **17%** |
+| clear_handwriting | 51.8% | **20.2%** | 0% | **17%** |
 | degraded_handwriting | **85.7%** | 100.0% | 0% | 0% |
 
 **Tesseract is better on clean and moderately degraded input**, by a factor of
@@ -615,8 +615,8 @@ claim that the classical front end is the bottleneck.
 6. The Week 1 prediction that the FRQI/NEQR qubit gap would widen with patch
    size is refuted by measurement; it narrows, from 3.33× to 2.00×.
 7. Measured over 30 splits, the quantum-versus-classical parity is a null
-   result (p = 0.30, 14 splits won of 30) while the raw-pixel lead is not
-   (p = 5×10⁻¹², 30 of 30). The two central comparisons differ in strength and
+   result (p = 0.23, 15 splits won of 30) while the raw-pixel lead is not
+   (p = 6×10⁻¹², 30 of 30). The two central comparisons differ in strength and
    only the second is a real effect.
 8. Against Tesseract on the same images, this pipeline is three to four times
    worse on clean input. It is not competitive with mature classical OCR, and
