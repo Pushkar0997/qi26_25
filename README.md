@@ -7,6 +7,11 @@
 (Track B) were assigned tracks that were not taken up; see Section 11 of the
 report.
 
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE). Chosen for consistency with Qiskit,
+which this project builds on, and for its explicit patent grant.
+
 ---
 
 ## What this is
