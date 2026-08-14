@@ -94,10 +94,43 @@ def run_node(payload, model_path):
                          + r.stdout[:2000] + "\nSTDERR: " + r.stderr[-2000:])
 
 
-def main():
+def check_export_is_current():
+    """Fail loudly if web/model.json was exported from a different backend.
+
+    Retraining writes integration/ocr_backend.npz but does NOT refresh
+    web/model.json, so the browser keeps serving the previous weights. Without
+    this check the symptom is a bare "text DIFFERS" from the parity run, which
+    looks like a porting bug in pipeline.js and sends you hunting in the wrong
+    place. It is also the exact failure a reviewer hits after cloning the repo
+    and regenerating the dataset on a machine with different fonts.
+    """
     model = WEB / "model.json"
+    npz = ROOT / "integration" / "ocr_backend.npz"
     if not model.exists():
-        raise SystemExit("web/model.json missing — run python web/export_model.py")
+        raise SystemExit("web/model.json missing — run: python web/export_model.py")
+    if not npz.exists():
+        raise SystemExit("integration/ocr_backend.npz missing — run: "
+                         "python integration/pipeline.py --train")
+
+    exported = json.loads(model.read_text())
+    d = np.load(npz, allow_pickle=True)
+    coef = np.asarray(d["coef"], dtype=float)
+    ex_coef = np.asarray(exported["ocr_coef"], dtype=float)
+
+    if ex_coef.shape != coef.shape or not np.allclose(ex_coef, coef, atol=1e-9):
+        raise SystemExit(
+            "\nweb/model.json is STALE — it does not match the trained backend.\n"
+            "  exported holdout accuracy : {:.4f}\n"
+            "  current backend accuracy  : {:.4f}\n\n"
+            "The browser would serve different weights than Python. Fix:\n"
+            "  python web/export_model.py\n".format(
+                exported["meta"].get("holdout_acc", float("nan")),
+                float(d["holdout_acc"])))
+
+
+def main():
+    check_export_is_current()
+    model = WEB / "model.json"
 
     docs = []
     for tier in ["clean_digital", "clean_scan", "noisy_scan"]:
