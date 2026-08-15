@@ -9,7 +9,12 @@ qiskit-aer>=0.15      # verified 0.17.2
 # --- numerics / imaging ---
 numpy>=1.26           # verified 2.4.4
 scipy>=1.11           # verified 1.17.1  (ndimage: page denoising, speckle removal)
-pillow>=10.0          # verified 12.1.1  (dataset rendering + crop resizing)
+pillow>=10.0          # dataset rendering + crop resizing.
+                      # The version is NOT the reproducibility discriminator --
+                      # whether Pillow was built with libraqm is, because that
+                      # changes glyph advances. generate_dataset.py pins the
+                      # BASIC layout engine explicitly so the build does not
+                      # matter; manifest.json records what was used.
 
 # --- classical OCR backend ---
 scikit-learn>=1.3     # verified 1.8.0   (LogisticRegression, train_test_split)

@@ -87,6 +87,23 @@ FONT_HAND_CANDIDATES = [
 ]
 
 
+# Pillow silently selects a text layout engine at font-load time: RAQM when the
+# library was built with libraqm, BASIC otherwise. The two return different glyph
+# advances -- Arial 'Q' is 17.109375 px under RAQM and 17.0 under BASIC -- and
+# render_page accumulates those advances along each line. The result is that the
+# SAME seed and the SAME font file produce glyphs shifted by 0-2 px depending on
+# how Pillow happened to be compiled.
+#
+# This is not hypothetical: a regeneration on a machine whose Pillow had libraqm
+# reproduced every document identically in content while moving every glyph,
+# which invalidated a committed results file before it was caught. Pinning the
+# engine makes the dataset reproducible regardless of the Pillow build.
+try:
+    LAYOUT = ImageFont.Layout.BASIC
+except AttributeError:          # Pillow < 8
+    LAYOUT = ImageFont.LAYOUT_BASIC
+
+
 def resolve_font(candidates, kind):
     """Return the first candidate PIL can actually open.
 
@@ -97,7 +114,7 @@ def resolve_font(candidates, kind):
     """
     for cand in candidates:
         try:
-            ImageFont.truetype(cand, 12)
+            ImageFont.truetype(cand, 12, layout_engine=LAYOUT)
             return cand
         except (OSError, IOError):
             continue
@@ -172,7 +189,7 @@ def make_document_text(rng):
 def render_page(lines, handwriting, rng, font_print, font_hand):
     """Return (grayscale page as uint8, index map as int32, list of char labels)."""
     font_path = font_hand if handwriting else font_print
-    font = ImageFont.truetype(font_path, FONT_SIZE)
+    font = ImageFont.truetype(font_path, FONT_SIZE, layout_engine=LAYOUT)
 
     page = Image.new("L", (PAGE_W, PAGE_H), color=255)
     idx_map = Image.new("I", (PAGE_W, PAGE_H), color=0)
@@ -209,7 +226,8 @@ def render_page(lines, handwriting, rng, font_print, font_hand):
             glyph_font = font
             if abs(scale - 1.0) > 1e-3:
                 glyph_font = ImageFont.truetype(
-                    font_path, max(10, int(FONT_SIZE * scale))
+                    font_path, max(10, int(FONT_SIZE * scale)),
+                    layout_engine=LAYOUT
                 )
 
             # Draw the glyph on its own tile so it can be rotated
@@ -461,6 +479,16 @@ def main():
 
     all_labels = sorted({l for t in TIERS
                          for l in np.load(out_root / t / "chars.npz")["labels"].tolist()})
+    # Record the imaging stack. The manifest previously captured seed, fonts and
+    # platform, all of which matched across a regeneration that nonetheless moved
+    # every pixel -- because the discriminator was the Pillow build, which was
+    # not recorded. These three fields make that class of drift a one-line diff.
+    from PIL import features as _pilfeat
+    manifest["pillow_version"] = Image.__version__
+    manifest["freetype_version"] = _pilfeat.version("freetype2")
+    manifest["raqm_available"] = bool(_pilfeat.check("raqm"))
+    manifest["layout_engine"] = "BASIC (pinned)"
+
     manifest["classes_present"] = "".join(all_labels)
     manifest["n_classes"] = len(all_labels)
     unused = sorted(set(CHARSET) - set(all_labels))

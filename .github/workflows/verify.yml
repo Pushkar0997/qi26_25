@@ -104,14 +104,22 @@ jobs:
       - name: Report and results agree
         run: |
           python - <<'PY'
-          import json, pathlib
+          import json, pathlib, re
           r = json.load(open("benchmarking/results.json"))
           rep = pathlib.Path("docs/final_report.md").read_text()
           missing = []
+
+          def present(val):
+              # Plain substring matching is wrong here: "0%" is a substring of
+              # both "100%" and "50%", so every id_exact assertion passed
+              # unconditionally and the check did no work on half its inputs.
+              # Require that the value is not preceded or followed by a digit.
+              return re.search(r"(?<![\d.])" + re.escape(val) + r"(?!\d)", rep)
+
           for tier, b in r["B"].items():
               for val in ("{:.1f}%".format(b["cer_mean"] * 100),
                           "{:.0f}%".format(b["id_exact_match"] * 100)):
-                  if val not in rep:
+                  if not present(val):
                       missing.append(f"{tier}: {val}")
           for stale in ("PENDING", "TODO", "TBD"):
               if stale in rep:
