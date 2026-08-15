@@ -42,11 +42,29 @@
         "dim": 64
       },
       "quanv (+ZZ corr)": {
-        "acc": 0.9833,
+        "acc": 0.9767,
         "dim": 160
       },
       "classical conv (dim-matched)": {
-        "acc": 0.98,
+        "acc": 0.9767,
+        "dim": 160
+      },
+      "raw pixels": {
+        "acc": 0.9833,
+        "dim": 64
+      }
+    },
+    "clear_handwriting": {
+      "quanv (marginals)": {
+        "acc": 0.8767,
+        "dim": 64
+      },
+      "quanv (+ZZ corr)": {
+        "acc": 0.9667,
+        "dim": 160
+      },
+      "classical conv (dim-matched)": {
+        "acc": 0.9633,
         "dim": 160
       },
       "raw pixels": {
@@ -54,94 +72,76 @@
         "dim": 64
       }
     },
-    "clear_handwriting": {
-      "quanv (marginals)": {
-        "acc": 0.8867,
-        "dim": 64
-      },
-      "quanv (+ZZ corr)": {
-        "acc": 0.97,
-        "dim": 160
-      },
-      "classical conv (dim-matched)": {
-        "acc": 0.9733,
-        "dim": 160
-      },
-      "raw pixels": {
-        "acc": 0.9733,
-        "dim": 64
-      }
-    },
     "degraded_handwriting": {
       "quanv (marginals)": {
-        "acc": 0.6379,
+        "acc": 0.6246,
         "dim": 64
       },
       "quanv (+ZZ corr)": {
-        "acc": 0.7375,
+        "acc": 0.7575,
         "dim": 160
       },
       "classical conv (dim-matched)": {
-        "acc": 0.7342,
+        "acc": 0.7442,
         "dim": 160
       },
       "raw pixels": {
-        "acc": 0.7741,
+        "acc": 0.794,
         "dim": 64
       }
     },
     "ALL_TIERS": {
       "quanv (marginals)": {
-        "acc": 0.8752,
+        "acc": 0.8665,
         "dim": 64
       },
       "quanv (+ZZ corr)": {
-        "acc": 0.9283,
+        "acc": 0.9223,
         "dim": 160
       },
       "classical conv (dim-matched)": {
-        "acc": 0.925,
+        "acc": 0.919,
         "dim": 160
       },
       "raw pixels": {
-        "acc": 0.9429,
+        "acc": 0.9363,
         "dim": 64
       }
     }
   },
   "B": {
     "clean_digital": {
-      "cer_mean": 0.0779,
-      "cer_std": 0.0109,
-      "segmentation_recall_proxy": 0.939,
+      "cer_mean": 0.0661,
+      "cer_std": 0.0055,
+      "segmentation_recall_proxy": 0.95,
       "id_exact_match": 1.0,
       "n_docs": 12
     },
     "clean_scan": {
-      "cer_mean": 0.1247,
-      "cer_std": 0.0304,
-      "segmentation_recall_proxy": 0.923,
-      "id_exact_match": 0.5,
+      "cer_mean": 0.0853,
+      "cer_std": 0.0176,
+      "segmentation_recall_proxy": 0.933,
+      "id_exact_match": 0.583,
       "n_docs": 12
     },
     "noisy_scan": {
-      "cer_mean": 0.8091,
-      "cer_std": 0.0344,
-      "segmentation_recall_proxy": 0.358,
+      "cer_mean": 0.7954,
+      "cer_std": 0.0487,
+      "segmentation_recall_proxy": 0.341,
       "id_exact_match": 0.0,
       "n_docs": 12
     },
     "clear_handwriting": {
-      "cer_mean": 0.5542,
-      "cer_std": 0.0245,
-      "segmentation_recall_proxy": 0.746,
+      "cer_mean": 0.518,
+      "cer_std": 0.0282,
+      "segmentation_recall_proxy": 0.705,
       "id_exact_match": 0.0,
       "n_docs": 12
     },
     "degraded_handwriting": {
-      "cer_mean": 0.8884,
-      "cer_std": 0.1039,
-      "segmentation_recall_proxy": 1.008,
+      "cer_mean": 0.8568,
+      "cer_std": 0.1162,
+      "segmentation_recall_proxy": 0.987,
       "id_exact_match": 0.0,
       "n_docs": 12
     }
@@ -248,10 +248,10 @@
     "cx_exponent": 1.393
   },
   "E": {
-    "64": 0.6952,
-    "256": 0.8214,
-    "1024": 0.8592,
-    "4096": 0.8659,
-    "exact": 0.8752
+    "64": 0.7072,
+    "256": 0.8174,
+    "1024": 0.8519,
+    "4096": 0.8665,
+    "exact": 0.8665
   }
 }
