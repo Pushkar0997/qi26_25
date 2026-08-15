@@ -76,6 +76,28 @@ jobs:
               raise SystemExit("benchmark drifted from the reported values")
           PY
 
+      # Gates the conclusions, not the exact figures. The solver is not
+      # bit-reproducible across BLAS builds, so p-values and win counts move
+      # between machines while the findings do not. Asserting p < 0.05 for a
+      # null result would be exactly backwards, so the null is checked as
+      # "clearly not significant" and the real effects as "clearly significant".
+      - name: Significance conclusions hold
+        run: |
+          python benchmarking/seed_sweep.py --seeds 30
+          python - <<'PY'
+          import json
+          t = json.load(open("benchmarking/seed_sweep.json"))["tests"]
+          null = t["quanv (+ZZ corr) - classical conv"]
+          real = t["raw pixels - quanv (+ZZ corr)"]
+          print(f"  parity   p={null['p']:.3f}  {null['wins']}/{null['n']} splits")
+          print(f"  raw lead p={real['p']:.2g}  {real['wins']}/{real['n']} splits")
+          assert null["p"] > 0.05, "quantum-vs-classical parity is no longer a null result"
+          assert 10 <= null["wins"] <= 20, "parity win count left the coin-flip range"
+          assert real["p"] < 1e-6, "the raw-pixel lead is no longer significant"
+          assert real["wins"] >= 28, "the raw-pixel lead no longer holds in nearly every split"
+          print("  conclusions hold")
+          PY
+
       - name: Browser demo matches the Python pipeline
         run: python web/verify_parity.py
 

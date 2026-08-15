@@ -401,6 +401,10 @@ def main():
 
     rng = np.random.default_rng(args.seed)
     out_root = Path(args.out)
+    # "charset" is what the generator may emit; "classes_present" is what the
+    # documents actually contain. They differ -- the document vocabulary happens
+    # never to use certain letters -- and the classifier is trained on the
+    # latter, so recording only the charset overstates the problem size.
     manifest = {"seed": args.seed, "charset": CHARSET, "crop_size": CROP_SIZE,
                 "font_print": font_print, "font_hand": font_hand,
                 "platform": sys.platform, "tiers": {}}
@@ -455,8 +459,18 @@ def main():
         print("{:22s}  {:3d} docs  {:5d} char crops".format(
             tier, args.docs_per_tier, crops_arr.shape[0]))
 
+    all_labels = sorted({l for t in TIERS
+                         for l in np.load(out_root / t / "chars.npz")["labels"].tolist()})
+    manifest["classes_present"] = "".join(all_labels)
+    manifest["n_classes"] = len(all_labels)
+    unused = sorted(set(CHARSET) - set(all_labels))
+    manifest["charset_symbols_unused"] = "".join(unused)
+
     with open(out_root / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
+    print("\nclasses present: {} of {} charset symbols"
+          " (unused: {})".format(len(all_labels), len(CHARSET),
+                                 "".join(unused) or "none"))
     print("\nManifest written to", out_root / "manifest.json")
 
 

@@ -45,11 +45,14 @@ The results are largely negative, and deliberately reported as such:
 - Grover string matching works correctly, but oracle CX cost grows with a
   measured exponent of **1.39** in text length, so the √N query advantage does
   not survive data loading for stored classical text.
-- Measured over 30 splits, quantum-vs-classical parity is a **null result**
-  (p=0.23, 15/30 splits won) while the raw-pixel lead is real (p=6e-12, 30/30).
+- Measured over 30 paired splits, quantum-vs-classical parity is a **null
+  result** (p is roughly 0.2-0.3, about half the splits won) while the raw-pixel
+  lead is real (p < 1e-10, 30/30).
 - Against **Tesseract** on the same images, this pipeline is 3-4x worse on clean
   input (6.6% vs 2.0% character error). It is not competitive with mature
-  classical OCR; the contribution is the measured characterisation of why.
+  classical OCR. On the two most degraded tiers Tesseract returns nothing at all
+  (100% error) where this pipeline recovers about one character in five - an
+  artefact of its page analysis rejecting unreadable input, not a better method.
 - The pipeline's dominant error source is the **classical segmentation front
   end**, not either quantum stage. Clean-document CER is 6.5-8.8%, and **100% of
   clean digital documents have their identifier recovered exactly** end-to-end
@@ -134,6 +137,8 @@ track_a_vision/encoding/encoding_scaling.py  FRQI vs NEQR across patch sizes
 track_a_vision/quanvolutional/train_filter.py variational filter training
 track_b_search/oracle/comparator_oracle.py   in-circuit Grover comparator
 benchmarking/run_benchmark.py                5-experiment suite
+benchmarking/seed_sweep.py                   significance over 30 paired splits
+benchmarking/tesseract_baseline.py           external OCR baseline
 benchmarking/make_figures.py                 figures from committed results
 docs/final_report.md                         the report
 ```

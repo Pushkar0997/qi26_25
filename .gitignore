@@ -22,11 +22,11 @@ data/raw/*
 # Committing the data makes every machine see identical crops, so the report,
 # the notebooks and web/model.json agree everywhere. Regenerate only if you
 # intend to change the dataset:
-#   python data/generate_dataset.py --docs-per-tier 12 --seed 26
+#   python data/generate_dataset.py --docs-per-tier 12 --seed 26 --force
 
-# Trained OCR backend — build artifact, regenerate with:
-#   python integration/pipeline.py --train
-# Check the commit for reason for removal
+# The trained OCR backend (integration/ocr_backend.npz) is COMMITTED, not
+# ignored. Training is not bit-reproducible across BLAS builds, so a retrained
+# backend no longer matches web/model.json and the browser parity check fails.
 
 # Benchmark outputs ARE committed (results.json / results.md) — they are the
 # evidence behind the report and must be reviewable without running anything.
@@ -38,4 +38,4 @@ Thumbs.db
 # Local tooling for the documentation pass — not part of the deliverable
 .claude/
 .nb_snapshot/
-tools/ 
+tools/
