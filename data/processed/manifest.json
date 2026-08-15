@@ -336,5 +336,8 @@
         }
       ]
     }
-  }
+  },
+  "classes_present": "-0123456789:ABCDEFGHIJKLMNOPQRSTUVWY",
+  "n_classes": 36,
+  "charset_symbols_unused": "XZ"
 }
