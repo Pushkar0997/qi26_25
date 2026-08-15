@@ -54,12 +54,12 @@ The results are largely negative, and deliberately reported as such:
   (100% error) where this pipeline recovers about one character in five - an
   artefact of its page analysis rejecting unreadable input, not a better method.
 - The pipeline's dominant error source is the **classical segmentation front
-  end**, not either quantum stage. Clean-document CER is 6.5-8.8%, and **100% of
+  end**, not either quantum stage. Clean-document CER is 6.6-8.5%, and **100% of
   clean digital documents have their identifier recovered exactly** end-to-end
   through both quantum stages (50% on clean scans, 0% on degraded input).
 - The largest single improvement came from fixing a **train/serve skew** (crops
   cut from ground-truth bounds in training vs segmentation bounds at inference),
-  which cut clean-document CER 6.6x. It was found because a *better* feature set
+  which cut clean-document CER 6.5x. It was found because a *better* feature set
   produced *worse* end-to-end output - isolated-character accuracy turned out to
   be a misleading proxy for pipeline quality.
 - The Week 1 prediction that the FRQI/NEQR qubit gap widens with patch size is

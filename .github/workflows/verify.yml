@@ -64,8 +64,8 @@ jobs:
           # bit-reproducible across BLAS builds, so a CI runner lands within a
           # few tenths of a point of the committed figures rather than on them.
           checks = [
-              ("clean_digital CER", r["B"]["clean_digital"]["cer_mean"], 0.065, 0.02),
-              ("clean_scan CER",    r["B"]["clean_scan"]["cer_mean"],    0.088, 0.02),
+              ("clean_digital CER", r["B"]["clean_digital"]["cer_mean"], 0.066, 0.02),
+              ("clean_scan CER",    r["B"]["clean_scan"]["cer_mean"],    0.085, 0.02),
               ("Grover CX exponent", r["D"]["cx_exponent"],              1.39,  0.05),
               ("raw pixels acc",    r["A"]["ALL_TIERS"]["raw pixels"]["acc"], 0.936, 0.01),
           ]

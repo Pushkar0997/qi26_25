@@ -120,7 +120,16 @@ def experiment_a():
 # B. End-to-end CER per tier
 # --------------------------------------------------------------------------
 
-def experiment_b(max_docs=8):
+def experiment_b(max_docs=None):
+    """End-to-end evaluation over every document in each tier.
+
+    max_docs was previously 8, an arbitrary cap chosen for speed while the
+    pipeline was changing frequently. It left four documents per tier unused and
+    produced figures that disagreed with tesseract_baseline.py, which evaluates
+    all twelve — the same pipeline reporting two different error rates in two
+    tables of the same report. Using every document removes that discrepancy and
+    makes the external comparison exactly like for like.
+    """
     print("\n[B] End-to-end pipeline, per tier")
     if not P.MODEL_PATH.exists():
         P.train_backend()
@@ -129,7 +138,8 @@ def experiment_b(max_docs=8):
     rows = {}
     for tier in TIERS:
         cers, seg_ratio, id_hits = [], [], []
-        for f in sorted((DATA / tier).glob("doc_*.png"))[:max_docs]:
+        files = sorted((DATA / tier).glob("doc_*.png"))
+        for f in (files[:max_docs] if max_docs else files):
             meta = json.loads(f.with_suffix(".json").read_text())
             from PIL import Image
             arr = np.array(Image.open(f).convert("L"), dtype=np.uint8)

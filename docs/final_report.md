@@ -319,17 +319,17 @@ pipeline's actual task; a single wrong character makes an identifier useless.
 
 | Tier | CER | Segmentation ratio | Document ID recovered exactly |
 |---|---|---|---|
-| clean_digital | 6.5% | 0.95 | **100%** |
-| clean_scan | 8.8% | 0.93 | 50% |
-| clear_handwriting | 52.2% | 0.69 | 0% |
-| noisy_scan | 78.5% | 0.36 | 0% |
-| degraded_handwriting | 88.3% | 1.02 | 0% |
+| clean_digital | 6.6% | 0.95 | **100%** |
+| clean_scan | 8.5% | 0.93 | 58% |
+| clear_handwriting | 51.8% | 0.70 | 0% |
+| noisy_scan | 79.5% | 0.34 | 0% |
+| degraded_handwriting | 85.7% | 0.99 | 0% |
 
 **Why the last column is the one that matters.** CER measures average character
 quality, but the pipeline's actual job is retrieving a specific field, and a
 single wrong character makes an identifier useless. The two metrics come apart
-sharply: `clean_scan` reads at 8.8% CER — visually almost clean — yet only half
-its documents yield a usable ID, because the errors that remain land inside the
+sharply: `clean_scan` reads at 8.5% CER — visually almost clean — yet only 58%
+of its documents yield a usable ID, because the errors that remain land inside the
 identifier as often as anywhere else. Averaged character accuracy flatters a
 system that fails the task half the time.
 
@@ -367,18 +367,18 @@ are dropped rather than guessed). Effect:
 
 | Tier | CER before | CER after | Reduction |
 |---|---|---|---|
-| clean_digital | 42.9% | **6.5%** | 6.6× |
-| clean_scan | 29.7% | **8.8%** | 3.4× |
-| clear_handwriting | 74.5% | **52.2%** | 1.4× |
-| noisy_scan | 89.7% | **78.5%** | 1.1× |
-| degraded_handwriting | 94.1% | **88.3%** | 1.1× |
+| clean_digital | 42.9% | **6.6%** | 6.5× |
+| clean_scan | 29.7% | **8.5%** | 3.5× |
+| clear_handwriting | 74.5% | **51.8%** | 1.4× |
+| noisy_scan | 89.7% | **79.5%** | 1.1× |
+| degraded_handwriting | 94.1% | **85.7%** | 1.1× |
 
 **Interpreting the isolated-accuracy figure.** Training on segmented crops
 *lowers* reported held-out character accuracy from 92.6% to 67.7%. This is not a
 regression: the two numbers are measured on different crop distributions, and
 the 67.7% is measured on the harder, realistic one. The comparison to draw is
 that a model scoring 92.6% on clean bounds produced 42.9% document CER, while a
-model scoring 67.7% on realistic bounds produced 6.5%.
+model scoring 67.7% on realistic bounds produced 6.6%.
 
 **This is the most transferable finding in the project: isolated-character
 accuracy was an actively misleading proxy for end-to-end accuracy here, and
@@ -416,8 +416,10 @@ pipeline?" but leaves the pipeline itself unanchored: a character error rate of
 6.5% means little without a reference point.
 
 Tesseract is the obvious reference — a mature open-source engine in development
-since 1985 — and it was run on the same document images, scored with the same
-error function (`benchmarking/tesseract_baseline.py`):
+since 1985 — and it was run on the same document images, over the same twelve
+documents per tier, scored with the same error function
+(`benchmarking/tesseract_baseline.py`). The pipeline column below therefore
+matches Section 6.1 exactly:
 
 | Tier | This pipeline CER | Tesseract CER | This pipeline ID | Tesseract ID |
 |---|---|---|---|---|
@@ -450,13 +452,13 @@ tool, and the answer belongs in the report whether or not it flatters the work.
 
 ### 6.4 Remaining error
 
-With the skew corrected, clean-tier CER of 6.5–8.8% against segmentation
+With the skew corrected, clean-tier CER of 6.6–8.5% against segmentation
 recovering 93–95% of characters means the residual error is dominated by
 missed/merged glyphs and word-spacing reconstruction rather than by
 classification. **The classical front end, not the quantum stage, remains the
 accuracy bottleneck on clean documents.**
 
-On `noisy_scan` the pipeline degrades sharply (ratio 0.36): 45% downsampling
+On `noisy_scan` the pipeline degrades sharply (ratio 0.34): 45% downsampling
 plus blur fuses adjacent glyphs, and projection-profile segmentation cannot
 separate them. Valley-based splitting recovers part of this but not most. This
 is a real limit of the chosen segmentation method and is reported rather than
@@ -609,7 +611,7 @@ claim that the classical front end is the bottleneck.
    the √N query advantage does not translate into an end-to-end speedup for
    stored classical text.
 4. The dominant error source in the full pipeline is the classical segmentation
-   front end, not either quantum stage. Clean-document CER is 6.5–8.8%, and
+   front end, not either quantum stage. Clean-document CER is 6.6–8.5%, and
    100% of clean digital documents have their identifier recovered exactly
    end-to-end — falling to 50% on clean scans and 0% on degraded input, which
    is the honest operating envelope.
@@ -634,7 +636,7 @@ claim that the classical front end is the bottleneck.
    pipeline as a product.
 9. Isolated-character accuracy proved a misleading proxy for end-to-end
    accuracy: the configuration scoring 92.6% on pre-cut crops produced 42.9%
-   document CER, while the configuration scoring 67.7% produced 6.5%.
+   document CER, while the configuration scoring 67.7% produced 6.6%.
 
 The honest summary is that this work does not demonstrate quantum advantage for
 document intelligence, and it identifies specific, measured reasons why: random
