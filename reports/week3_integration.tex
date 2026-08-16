@@ -1,0 +1,186 @@
+\documentclass[11pt,a4paper]{article}
+\input{weekly_preamble}
+
+\begin{document}
+\weekhead{3}{Integration and Raw Extraction}
+{Working Python script extracting text from sample documents.}
+
+\section{Objective}
+
+Connect the quantum vision output to a digital text stream: interface the
+quantum-processed features with a lightweight classical OCR backend, and produce
+a script that takes a document image and returns extracted text.
+
+\section{Pipeline}
+
+Nine stages, of which two are quantum:
+
+\begin{center}
+\small
+\begin{tabular}{@{}rll@{}}
+\toprule
+\# & Stage & Description \\
+\midrule
+1 & preprocess & median filter, Otsu threshold, speckle removal \\
+2 & segment & projection profiles $\rightarrow$ character boxes \\
+3 & crop & pad to square, resize to $8\times8$, normalise \\
+4--5 & \textbf{quantum} & \textbf{$R_Y$ encoding + quanvolutional layer $\rightarrow$ 160 features} \\
+6 & classify & multinomial logistic regression $\rightarrow$ characters \\
+7 & assemble & rebuild lines, insert spaces \\
+8 & locate & identify the document identifier field \\
+9 & \textbf{quantum} & \textbf{Grover comparator search (Week 4)} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The classifier at stage 6 is the ``lightweight classical OCR back-end'' the brief
+specifies: feature extraction is quantum, the decision layer is not.
+
+\section{Classical Front End}
+
+Three preprocessing operations, each addressing a specific failure.
+
+\textbf{Median filter} removes isolated speckle while preserving edges, unlike a
+Gaussian blur which would smear thin strokes.
+
+\textbf{Otsu threshold} selects the intensity cut maximising between-class
+variance. A fixed threshold was rejected because the five tiers differ greatly in
+overall brightness and any constant fails on at least one.
+
+\textbf{Speckle removal} drops connected components too small to be a stroke.
+This is not cosmetic: without it the noisy tiers place sub-threshold pixels in
+\emph{every} row of the page, so line detection found a single 420-row ``line''
+and segmentation collapsed entirely.
+
+Segmentation then sums ink along rows to find text lines, and within each line
+along columns to find characters. The row threshold is adaptive---a real text
+line marks a meaningful fraction of the page width---because a fixed
+``more than one pixel'' test allowed residual noise to merge the page into one
+line on degraded scans.
+
+\subsection{Two Fixes Worth Recording}
+
+\textbf{Aspect ratio.} Each character box is padded to square \emph{before}
+resizing to $8\times8$. Resizing directly destroys aspect ratio, and for OCR this
+is not cosmetic: a colon is two small dots in a narrow tall box, and stretched to
+a square it becomes two thick horizontal bands closely resembling an
+\texttt{E}. Before this was fixed, \texttt{C}$\rightarrow$\texttt{:} and
+\texttt{E}$\rightarrow$\texttt{:} confusions dominated the error and CER was
+32\%.
+
+\textbf{Merged glyph splitting.} On low-DPI scans, downsampling plus blur closes
+the gap between adjacent glyphs so the column profile sees no separator. The
+obvious fix---cutting a too-wide box into equal slices---was tried and was
+\emph{wrong}: on degraded tiers it over-segmented badly, cutting single
+characters apart and pushing error above 100\% through pure insertions. The
+working version cuts only at genuine valleys in the ink profile and leaves a box
+intact if it has none, so a legitimately wide \texttt{M} survives.
+
+\section{Results}
+
+\begin{table}[h]
+\centering
+\caption{End-to-end extraction, all 12 documents per tier.}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Tier & CER & Segmentation ratio & ID recovered exactly \\
+\midrule
+clean\_digital & 6.6\% & 0.95 & \textbf{100\%} \\
+clean\_scan & 8.5\% & 0.93 & 58\% \\
+noisy\_scan & 79.5\% & 0.34 & 0\% \\
+clear\_handwriting & 51.8\% & 0.70 & 0\% \\
+degraded\_handwriting & 85.7\% & 0.99 & 0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two metrics are reported because they diverge. Character error rate measures
+average character quality; identifier recovery measures whether the pipeline did
+its actual job, for which one wrong character makes the result useless.
+\texttt{clean\_scan} reads at 8.5\% CER---visually almost clean---yet yields a
+usable identifier in only 58\% of documents.
+
+\honestnote{%
+\textbf{Three of five tiers fail outright.} Noisy scans and both handwriting
+tiers have character error rates of 52--86\% and recover no identifiers at all.
+The pipeline is usable on clean digital input and not usable on degraded input,
+and the tier-by-tier breakdown is reported rather than an average that would
+obscure it.}
+
+\section{The Largest Error Source Was a Data Bug}
+
+The biggest single improvement in the entire project came from a data-handling
+defect, not from any modelling change.
+
+\textbf{How it surfaced.} Switching the feature stage from the 64-dimensional
+marginal readout to the 160-dimensional $+ZZ$ readout \emph{raised} isolated
+character accuracy but made end-to-end CER \emph{worse}. A strictly better
+feature set producing strictly worse output is impossible if both are measured on
+the same input distribution---so they were not.
+
+\textbf{The cause.} Training crops were cut from exact glyph bounds recorded
+during dataset generation; inference crops come from projection segmentation.
+These are measurably different distributions: on \texttt{clean\_scan},
+ground-truth boxes have median size $16\times19$ px against segmented boxes at
+$12\times15$ px. The higher-capacity features fitted the training distribution
+more tightly and transferred less well.
+
+\textbf{The fix.} Training crops are now built by running the real segmentation
+path over training pages and labelling each detected box from ground truth by
+overlap, with ambiguous detections dropped rather than guessed.
+
+\begin{table}[h]
+\centering
+\caption{Effect of correcting the train/serve skew.}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Tier & CER before & CER after & Reduction \\
+\midrule
+clean\_digital & 42.9\% & \textbf{6.6\%} & $6.5\times$ \\
+clean\_scan & 29.7\% & \textbf{8.5\%} & $3.5\times$ \\
+clear\_handwriting & 74.5\% & \textbf{51.8\%} & $1.4\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{A Caution About the Accuracy Figure}
+
+Training on segmented crops \emph{lowers} reported held-out character accuracy
+from 92.6\% to 67.7\%. This is not a regression. The two numbers are measured on
+different crop distributions, and the lower one is measured on the harder,
+realistic distribution.
+
+The comparison to draw: a model scoring 92.6\% on clean bounds produced 42.9\%
+document CER, while a model scoring 67.7\% on realistic bounds produced 6.6\%.
+
+\honestnote{%
+\textbf{Isolated-character accuracy was an actively misleading proxy for
+end-to-end accuracy, and optimising it drove the pipeline in the wrong
+direction.} Any comparison of feature extractors on pre-cut crops---including
+the Week 2 comparison---measures something narrower than pipeline quality. This
+is the most transferable finding in the project.}
+
+\section{Where the Remaining Error Lies}
+
+On clean tiers, segmentation recovers 93--95\% of characters and isolated
+character accuracy approaches 99\%, yet CER is 6.6--8.5\%. The residual is
+therefore not classification but missed or merged glyphs and word-spacing
+reconstruction.
+
+\textbf{The classical front end, not either quantum stage, is the accuracy
+bottleneck on clean documents.}
+
+\section{Deliverable Status}
+
+Complete. A working script takes a document image and produces extracted text,
+run successfully across all five tiers.
+
+\vspace{0.3cm}
+\noindent\textbf{Artifacts:} \texttt{integration/pipeline.py},
+\texttt{notebooks/04\_full\_pipeline.ipynb}
+
+\vspace{0.2cm}
+\noindent\textbf{Usage:}
+\texttt{python integration/pipeline.py --doc data/processed/clean\_scan/doc\_000.png --pattern 38}
+
+\end{document}

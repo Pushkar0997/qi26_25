@@ -1,0 +1,155 @@
+\documentclass[11pt,a4paper]{article}
+\input{weekly_preamble}
+
+\begin{document}
+\weekhead{1}{Vision Foundation and Data Encoding}
+{Technical summary of encoding efficiency versus classical normalisation.}
+
+\section{Objective}
+
+Establish a quantum representation for document imagery. Two standard encodings
+were implemented and compared: FRQI (Flexible Representation of Quantum Images)
+and NEQR (Novel Enhanced Quantum Representation). The question to be answered is
+which is appropriate for a document-processing pipeline, and at what resource
+cost relative to simply normalising pixels classically.
+
+\section{The Two Encodings}
+
+\textbf{FRQI} stores each pixel's intensity as a rotation angle on a single
+shared colour qubit:
+\begin{equation}
+|I\rangle = \frac{1}{2^{n}}\sum_{i=0}^{2^{2n}-1}
+\big(\cos\theta_i\,|0\rangle + \sin\theta_i\,|1\rangle\big)\otimes|i\rangle,
+\qquad \theta_i = \frac{\pi}{2}\cdot\frac{v_i}{255}
+\end{equation}
+
+One qubit carries all colour information regardless of image size. The intensity
+range maps to $[0, \pi/2]$ rather than $[0,\pi]$ so that $\sin^2$ remains
+monotonic and a measured probability inverts to exactly one intensity.
+
+\textbf{NEQR} stores intensity as a bit string on a colour register:
+\begin{equation}
+|I\rangle = \frac{1}{2^{n}}\sum_{i}|f(i)\rangle\otimes|i\rangle
+\end{equation}
+
+An 8-bit greyscale image requires 8 colour qubits instead of 1, but
+reconstruction is exact.
+
+\section{Verification}
+
+A circuit that runs is not a circuit that is correct, so both encodings were
+inverted and checked against the original pixel values rather than assumed
+correct.
+
+For FRQI, the colour qubit was measured conditioned on each position and the
+encoding inverted:
+\begin{equation}
+v_i = \frac{255 \cdot 2}{\pi}\arcsin\sqrt{P(\text{colour}=1 \mid i)}
+\end{equation}
+
+\begin{table}[h]
+\centering
+\caption{Reconstruction accuracy on a $2\times2$ patch.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Encoding & Reconstruction & Maximum error \\
+\midrule
+FRQI & statistical, from measurement frequencies & 1--2 intensity levels of 255 \\
+NEQR & direct bit readout & \textbf{exactly 0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The FRQI residual is sampling error and shrinks as $1/\sqrt{\text{shots}}$; the
+figure above is at 8{,}192 shots. NEQR's error is exactly zero because no
+estimation is involved.
+
+\section{Resource Comparison}
+
+Both circuits were transpiled to a common $\{u, \mathrm{CX}\}$ basis before
+counting. This matters for fairness: multi-controlled gates are single
+instructions at the abstract level but expand into very different numbers of
+two-qubit gates depending on their control count, so counting before
+transpilation would make a six-control gate appear as cheap as a CX.
+
+\begin{table}[h]
+\centering
+\caption{Measured resources across three patch sizes.}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Patch & Pixels & FRQI qubits & NEQR qubits & FRQI CX & NEQR CX & Qubit ratio \\
+\midrule
+$2\times2$ & 4 & 3 & 10 & 32 & 114 & $3.33\times$ \\
+$4\times4$ & 16 & 5 & 12 & 384 & 1{,}558 & $2.40\times$ \\
+$8\times8$ & 64 & 7 & 14 & 3{,}584 & 10{,}998 & $2.00\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{A Prediction, and Its Refutation}
+
+The initial version of this summary, written before the $4\times4$ and $8\times8$
+measurements were taken, predicted that the qubit gap between the two encodings
+would \textbf{widen} as patch size grew.
+
+Measurement refutes this. The ratio \textbf{narrows}: $3.33\times \rightarrow
+2.40\times \rightarrow 2.00\times$.
+
+The original reasoning conflated two distinct quantities. FRQI's colour register
+is fixed at 1 qubit and NEQR's at 8, so the colour gap is a \emph{constant} 7
+qubits at every patch size. Meanwhile both encodings share an identically growing
+position register of $\lceil\log_2(\text{pixels})\rceil$. A constant gap divided
+by a growing shared base necessarily shrinks as a ratio.
+
+\honestnote{%
+The prediction was wrong and is recorded here rather than quietly corrected.
+Absolute CX counts do grow steeply for both encodings---NEQR reaches
+approximately 11{,}000 gates at $8\times8$---so NEQR remains far more expensive
+in absolute terms. It is specifically the \emph{relative} qubit penalty that
+decays.}
+
+\section{Comparison Against Classical Normalisation}
+
+The brief asked for encoding efficiency relative to classical normalisation. The
+comparison is stark and worth stating plainly.
+
+Classical normalisation of a $2\times2$ patch is four floating-point divisions:
+approximately four operations, exact, with no measurement required. FRQI requires
+3 qubits and 32 CX gates and returns an \emph{approximate} value needing
+thousands of shots to estimate. NEQR requires 10 qubits and 114 CX gates for an
+exact value.
+
+No efficiency argument favours quantum encoding at this scale. The encodings are
+of interest only as a route into subsequent quantum processing---if the
+subsequent processing provides an advantage, which is the question Weeks 2 and 4
+address.
+
+\section{Consequence for the Pipeline}
+
+The pipeline ultimately uses \emph{neither} encoding directly, and it is worth
+being explicit about why rather than leaving the reader to infer it.
+
+The quanvolutional layer developed in Week 2 uses a simple $R_Y$ angle encoding:
+one qubit per pixel of a $2\times2$ patch, rotated by $\pi v/255$. This is
+FRQI-like in spirit---intensity as angle---but has no position register, because
+a quanvolutional filter processes one patch at a time and never needs to address
+pixels by index.
+
+FRQI and NEQR remain relevant as the resource baseline for \emph{whole-image}
+quantum representation, which any approach operating on a full document at once
+would require. The measurement that NEQR costs roughly 11{,}000 CX gates for a
+single $8\times8$ patch is the quantitative reason this pipeline is patch-based
+rather than whole-image.
+
+\section{Deliverable Status}
+
+Complete. Both encodings implemented and verified by inversion; resource
+comparison measured at three patch sizes; the hypothesis about scaling tested and
+refuted.
+
+\vspace{0.3cm}
+\noindent\textbf{Artifacts:} \texttt{track\_a\_vision/encoding/encoding\_scaling.py},
+\texttt{notebooks/01\_encoding\_frqi\_neqr.ipynb},
+\texttt{benchmarking/encoding\_scaling.json}
+
+\end{document}

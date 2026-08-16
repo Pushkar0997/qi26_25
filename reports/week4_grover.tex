@@ -1,0 +1,201 @@
+\documentclass[11pt,a4paper]{article}
+\input{weekly_preamble}
+
+\begin{document}
+\weekhead{4}{Quantum String Operations (Processing Stage)}
+{Functional Grover-based string search simulation; oracle for $O(\sqrt{N})$ search complexity.}
+
+\section{Objective}
+
+Implement pattern matching using Grover-based logic: develop a quantum string
+matching algorithm to find structural identifiers such as document ID numbers,
+and build the oracle.
+
+\section{A Construction That Does Not Search}
+
+The starter implementation for this track, written in July, contained the
+following:
+
+\begin{lstlisting}
+match_positions = [i for i in range(len(text) - len(pattern) + 1)
+                   if text[i:i+len(pattern)] == pattern]
+oracle = build_marked_state_oracle(n_qubits, match_positions)
+\end{lstlisting}
+
+The comparison executes in Python, on the first line, before a single qubit is
+allocated. The circuit is then constructed to flip the phase of positions it has
+already been handed.
+
+Run it and it appears to work: the measured distribution peaks at the correct
+position and the amplification is textbook. It is a correct demonstration of
+Grover \emph{amplification}. It is not string matching, and no complexity claim
+can rest on it, because the $O(N)$ classical scan has already happened.
+
+\honestnote{%
+This construction is common in Grover string-matching demonstrations, and it is
+easy to ship without noticing---the output is indistinguishable from a working
+search. Identifying it is the reason this week's deliverable was rebuilt rather
+than extended.}
+
+\section{An In-Circuit Comparator Oracle}
+
+The replacement receives only the text and the pattern. Two registers:
+
+\begin{itemize}
+\item \texttt{pos}: $\lceil\log_2(N-M+1)\rceil$ qubits, holding candidate start
+      positions in superposition.
+\item \texttt{win}: $M \times b$ qubits, where $b$ is the alphabet width in
+      bits, holding the window of text at the candidate position.
+\end{itemize}
+
+\subsection{Four Stages}
+
+\textbf{1. Window loading.} For each concrete position $i$, multi-controlled
+writes load the bits of $\text{text}[i:i+M]$ into \texttt{win}, conditioned on
+$\texttt{pos}=i$:
+\begin{equation}
+|i\rangle|0\rangle \;\longrightarrow\; |i\rangle|\text{text}[i:i+M]\rangle
+\end{equation}
+Only 1-bits require a gate, since the register starts at $|0\rangle$.
+
+\textbf{2. Pattern XOR.} An $X$ gate is applied to $\texttt{win}[j]$ wherever
+pattern bit $j$ is 1. Because the pattern is classical and known at circuit-build
+time, this needs no controls. Afterwards the register holds
+$\text{window} \oplus \text{pattern}$, which is all-zeros exactly when they
+match---converting ``are these strings equal?'' into ``is this register
+all-zeros?'', a condition a single multi-controlled gate can test.
+
+\textbf{3. Phase marking.} Multi-controlled gates trigger on all-ones, so the
+register is sandwiched between $X$ layers: flip everything, test, flip back.
+
+\textbf{4. Uncomputation.} Stages 2 and 1 are reversed. Both are built purely
+from $X$ and multi-controlled $X$ gates, each its own inverse, so the same
+routine serves both directions.
+
+\subsection{Why Uncomputation Is Mandatory}
+
+After stage 1, \texttt{win} is \emph{entangled} with \texttt{pos}: state
+$|i\rangle$ is paired with the text at position $i$. The phase from stage 3
+attaches to that joint state.
+
+Stopping there and applying the diffusion operator to \texttt{pos} alone fails:
+the window acts as a which-path record, the amplitudes cannot interfere, and
+Grover amplifies nothing. Uncomputation returns \texttt{win} to $|0\rangle$ for
+every branch, disentangling it so the phase belongs to \texttt{pos} alone.
+
+\subsection{An Encoding Detail}
+
+Alphabet codes begin at 1, never 0. When $N-M+1$ is not a power of two, the
+position register addresses more states than there are valid positions. Those
+unreachable states never trigger a controlled load, so their window remains
+all-zeros---which is exactly the pattern stage 3 marks as a match. Reserving code
+0 eliminates this failure mode entirely.
+
+\section{Staged Verification}
+
+Correctness was established stage by stage rather than by observing a plausible
+final output, because a search returning the right answer for the wrong reason
+looks identical to one that works.
+
+\begin{table}[h]
+\centering
+\caption{Verification results.}
+\begin{tabular}{@{}rlc@{}}
+\toprule
+Stage & Check & Result \\
+\midrule
+1 & \texttt{win} holds $\text{text}[i:i+M]$ for a probe position & pass \\
+2 & Exactly the true match positions have negative amplitude & pass \\
+3 & Uncomputation leakage (probability outside $\texttt{win}=0$) & $\mathbf{0.00}$ \\
+4 & Full search returns a true match & pass, 95--96\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On a 16-character hexadecimal field with a 2-character pattern: 14 qubits, 3
+Grover iterations, correct position recovered in 95.2\% of shots.
+
+The zero-leakage measurement is load-bearing beyond this week: it is what
+licenses the browser demonstration to simulate the position register alone and
+have that reduction be exact rather than approximate.
+
+\section{Over-Rotation}
+
+A common intuition is that more Grover iterations sharpen the result. They do the
+opposite: amplitude rotates \emph{past} the target and back down. Success
+probability oscillates rather than converging, and the optimal count
+$\lfloor\frac{\pi}{4}\sqrt{N/M}\rfloor$ is a genuine optimum, not a minimum.
+
+\section{Resource Scaling}
+
+Grover provides $O(\sqrt{N})$ \emph{queries}. But the window-loading stage must
+write the text into the circuit, and each candidate position requires its own
+controlled load.
+
+\begin{table}[h]
+\centering
+\caption{Measured oracle resources, hexadecimal alphabet, 2-character pattern.}
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+$N$ (characters) & Qubits & Depth & CX gates \\
+\midrule
+8 & 13 & 1{,}857 & 1{,}082 \\
+16 & 14 & 6{,}383 & 3{,}428 \\
+32 & 15 & 16{,}159 & 8{,}570 \\
+64 & 16 & 39{,}558 & 20{,}904 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Fitting a power law in log--log space gives a CX scaling exponent of
+$\mathbf{1.39}$---\emph{superlinear} in text length. The measured curve lies
+above a linear reference and nowhere near $\sqrt{N}$.
+
+\honestnote{%
+\textbf{The $O(\sqrt{N})$ advantage does not survive.} For searching stored,
+unstructured classical text that must be loaded into the circuit, the loading
+cost dominates the search saving. This is a known caveat in the literature; the
+contribution here is reproducing it by direct measurement rather than quoting
+$\sqrt{N}$ unqualified.
+
+Grover's advantage remains real where the text is already available as a quantum
+oracle or in QRAM; where the search space is \emph{generated} by a function
+rather than stored, as in satisfiability or cryptographic preimage search; or
+where a loaded state is reused across many queries. None of these describes
+scanning a document just received.}
+
+\section{A Second Practical Limit}
+
+A full 38-symbol alphabet requires 6 qubits per character, so even a short search
+window exceeds what is simulable on ordinary hardware. The pipeline therefore
+searches the hexadecimal-representable identifier field, which is the realistic
+target for structured-field lookup in any case.
+
+\begin{table}[h]
+\centering
+\caption{Alphabet width against window cost.}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Alphabet & Bits per character & Qubits for an 8-character window \\
+\midrule
+Binary (2 symbols) & 1 & 8 \\
+Hexadecimal (16) & 5 & 40 \\
+Full charset (38) & 6 & 48 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Deliverable Status}
+
+Complete. A functional Grover-based string search that genuinely searches,
+verified stage by stage with zero uncomputation leakage, with resource scaling
+measured rather than assumed.
+
+\vspace{0.3cm}
+\noindent\textbf{Artifacts:} \texttt{track\_b\_search/oracle/comparator\_oracle.py},
+\texttt{notebooks/03\_grover\_comparator.ipynb}
+
+\vspace{0.2cm}
+\noindent\textbf{Self-test:} \texttt{python track\_b\_search/oracle/comparator\_oracle.py}
+
+\end{document}

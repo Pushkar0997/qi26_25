@@ -1,0 +1,157 @@
+\documentclass[11pt,a4paper]{article}
+\input{weekly_preamble}
+
+\begin{document}
+\weekhead{5}{Algorithmic Refinement and Data Cleaning}
+{Cleaned data output ready for industrial application.}
+
+\section{Status: Not Delivered}
+
+This deliverable was not completed. This report states what was specified, why it
+was cut, what would have been required, and what was done instead with the time.
+
+A documented account of an attempted and abandoned objective is a legitimate part
+of a research report; silently omitting the week would not be.
+
+\section{What Was Specified}
+
+The project brief set out three items for this week:
+
+\begin{itemize}
+\item Implement quantum subroutines for string alignment and cleaning of OCR
+      noise.
+\item Replace LLM-based parsing with targeted quantum logic for specific data
+      schemas.
+\item Deliver cleaned data output ready for industrial application.
+\end{itemize}
+
+\section{Why It Was Cut}
+
+\subsection{The Precondition Was Not Met}
+
+Quantum string alignment operates on extracted text. Its purpose is to correct
+residual OCR errors---aligning a noisy read against a schema or a reference
+vocabulary and repairing mismatches.
+
+That presupposes an extraction stage whose output is mostly correct, with sparse
+and localised errors. The measured reality at the point this week began:
+
+\begin{table}[h]
+\centering
+\caption{Extraction quality available as input to a cleaning stage.}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Tier & CER & Identifier recovered exactly \\
+\midrule
+clean\_digital & 6.6\% & 100\% \\
+clean\_scan & 8.5\% & 58\% \\
+noisy\_scan & 79.5\% & 0\% \\
+clear\_handwriting & 51.8\% & 0\% \\
+degraded\_handwriting & 85.7\% & 0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the two clean tiers, cleaning has little to work with: 100\% of clean digital
+identifiers are already exact, so a cleaning stage could improve nothing there.
+On the three degraded tiers, error rates of 52--86\% mean the input is not noisy
+text but largely wrong text. Alignment against a schema does not repair a string
+where most characters are incorrect; it produces a confident and wrong result.
+
+\subsection{The Resource Cost Was Prohibitive}
+
+Quantum sequence alignment via a Grover-based approach would extend the
+comparator oracle of Week 4. That oracle's measured cost is the obstacle:
+
+\begin{itemize}
+\item 3{,}272 CX gates for a 16-character field with a 2-character pattern.
+\item Measured scaling exponent of $1.39$ in text length---superlinear, because
+      each candidate position requires its own controlled data load.
+\item A full 38-symbol alphabet needs 6 qubits per character, placing even short
+      alignment windows beyond feasible simulation.
+\end{itemize}
+
+Alignment requires comparing against multiple reference candidates rather than a
+single pattern, multiplying an already superlinear cost. Week 4 had already
+established that the $\sqrt{N}$ advantage does not survive data loading for
+single-pattern search; there was no basis to expect it to survive for alignment.
+
+\subsection{Time}
+
+The project ran on a compressed schedule. Section~\ref{sec:scope} records the
+circumstances. Given a finite budget, the choice was between attempting this
+deliverable and completing the benchmarking that Week 6 specified.
+
+\honestnote{%
+Attempting this week would have produced a component that did not work, resting
+on an extraction stage that could not support it, at a resource cost already
+measured as prohibitive. A broken feature discovered at submission is worse than
+a documented decision not to build it.}
+
+\section{What Would Have Been Required}
+
+For completeness, the path to delivering this week properly:
+
+\begin{enumerate}
+\item \textbf{Fix the extraction stage first.} The measured bottleneck is the
+      classical segmentation front end, not the quantum stages. Clean-tier CER of
+      6.6--8.5\% against 93--95\% segmentation recovery means the residual error
+      is missed and merged glyphs. A learned detector replacing projection
+      profiles is the correct first step, and would raise extraction quality to
+      the point where cleaning has something to act on.
+\item \textbf{Adopt a coarser encoding for search.} The
+      one-qubit-per-candidate-position encoding is what makes the oracle
+      expensive. Stem-level or block-level encodings, as used in related QUBO
+      formulations, reduce both qubit count and loading cost.
+\item \textbf{Define the schema constraint explicitly.} ``Targeted quantum logic
+      for specific data schemas'' requires a specified schema. The synthetic
+      corpus uses a fixed identifier format, which would be a reasonable starting
+      constraint, but the brief did not specify a target schema and none was
+      agreed.
+\item \textbf{Establish a classical baseline first.} Fuzzy matching against a
+      schema is a solved classical problem. Without measuring that baseline,
+      there would be no way to tell whether a quantum implementation contributed
+      anything---which is exactly the failure mode Weeks 2 and 4 were designed to
+      avoid.
+\end{enumerate}
+
+\section{What Was Done Instead}
+
+The time was spent on work not specified in the brief but which strengthened the
+project's core claims:
+
+\begin{itemize}
+\item \textbf{Statistical significance testing.} The Week 2 comparison rested on
+      a single train--test split. Repeating over 30 paired splits established
+      that the quantum-versus-classical result is a null result
+      ($p \approx 0.2$--$0.3$) while the raw-pixel lead is real
+      ($p < 10^{-10}$). Without this the two claims were indistinguishable.
+\item \textbf{An external baseline.} Tesseract was run on identical images,
+      providing the reference point that the internal comparisons lacked.
+\item \textbf{Noise and hardware-feasibility analysis.} Gate error, readout error
+      and shot noise were modelled, establishing that the feature extractor is
+      plausible on near-term hardware while the search stage is not.
+\item \textbf{Reproducibility infrastructure.} Committed dataset and model,
+      browser-parity verification, and continuous integration that fails when the
+      report and measured results disagree.
+\end{itemize}
+
+\section{Scope}
+\label{sec:scope}
+
+The project was scoped for three participants, with separate owners for the
+vision and search tracks. Mentor contact ended in early July, and the two track
+assignments were not taken up. Both tracks were consolidated into a single-person
+scope.
+
+This is recorded as context for the schedule, not as justification for the
+decision above. The precondition and resource arguments of Section 3 stand
+independently: this deliverable would have been the correct one to cut even with
+a full team.
+
+\section{Deliverable Status}
+
+\textbf{Not delivered.} Cut deliberately, with reasons recorded here and in
+Section~8 of the final report.
+
+\end{document}

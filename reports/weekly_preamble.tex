@@ -1,0 +1,76 @@
+% Shared preamble for the qi26_25 weekly deliverable reports.
+%
+% Each weekly report is a short standalone document that inputs this file, so
+% that formatting stays consistent across all six without duplicating the
+% package list in every one. Change something here and every report follows.
+%
+% Usage in a weekly report:
+%     \documentclass[11pt,a4paper]{article}
+%     \input{weekly_preamble}
+%     \weekhead{1}{Vision Foundation and Data Encoding}{Week of ...}
+%     ... body ...
+%     \end{document}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+
+\definecolor{codebg}{RGB}{247,247,250}
+\definecolor{codekw}{RGB}{20,90,160}
+\definecolor{codecm}{RGB}{110,120,130}
+\definecolor{accent}{RGB}{20,90,160}
+
+\lstset{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm}\itshape,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!30},
+  language=Python,
+  showstringspaces=false,
+  xleftmargin=6pt,
+  framexleftmargin=6pt
+}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\titleformat{\section}{\normalfont\large\bfseries\color{accent}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.8em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\small\thepage}
+\fancyfoot[R]{\scriptsize\texttt{github.com/Pushkar0997/qi26\_25}}
+\renewcommand{\headrulewidth}{0pt}
+
+% \weekhead{number}{title}{deliverable as stated in the project brief}
+\newcommand{\weekhead}[3]{%
+  \begin{center}
+    {\scriptsize\textsf{QINTERN 2026 \textbullet\ QWORLD \textbullet\ WEEKLY DELIVERABLE}}\\[0.25cm]
+    {\LARGE\bfseries Week #1: #2}\\[0.35cm]
+    {\normalsize Hybrid QML and Quantum String Algorithms for Document Extraction}\\[0.25cm]
+    {\small Pushkar Kumar \quad\textbullet\quad Mentor: Potluri Krishna Priyatham}\\[0.4cm]
+    \fbox{\begin{minipage}{0.88\textwidth}
+      \small\textbf{Deliverable as specified in the project brief:} #3
+    \end{minipage}}
+  \end{center}
+  \vspace{0.4cm}
+}
+
+% A boxed note for caveats and honest limitations.
+\newcommand{\honestnote}[1]{%
+  \vspace{0.2cm}
+  \noindent\fcolorbox{gray!40}{gray!8}{%
+    \begin{minipage}{0.97\textwidth}\small #1\end{minipage}}
+  \vspace{0.2cm}
+}

@@ -1,0 +1,200 @@
+\documentclass[11pt,a4paper]{article}
+\input{weekly_preamble}
+
+\begin{document}
+\weekhead{2}{QML for Feature Extraction (OCR Stage)}
+{Simulation results of the quantum feature extraction layer.}
+
+\section{Objective}
+
+Build a quantum neural network component for character and layout detection:
+design a quanvolutional layer to identify document features, and train a
+variational quantum circuit for basic character recognition.
+
+\section{The Quanvolutional Filter}
+
+A quanvolutional layer is the quantum analogue of a convolution. A small window
+slides over the image; at each position the patch is encoded into a quantum
+state, transformed by a circuit, and measured.
+
+The filter is a fixed 4-qubit circuit: two layers of $R_Y$ rotations with a ring
+of CX gates between them, angles drawn once from a seeded generator and held
+constant. This is the canonical \emph{untrained random} formulation of Henderson
+et al.
+
+Two architectural points determine whether it does anything useful. Rotations
+alone would be useless---without the CX gates the circuit acts independently on
+each qubit, making the output a deterministic function of each pixel separately,
+with no interaction between pixels, which is the entire purpose of a convolution.
+And the ring closure (last qubit back to qubit 0) allows information to reach
+every qubit within one layer, where a plain chain would leave qubit 0 unable to
+influence qubit $n-1$ until the second layer.
+
+\subsection{Encoding}
+
+Each pixel value $v \in [0,255]$ becomes a rotation angle $\theta = \pi v/255$
+applied to its own qubit:
+\begin{equation}
+R_Y(\theta)|0\rangle = \cos(\theta/2)|0\rangle + \sin(\theta/2)|1\rangle
+\end{equation}
+A dark pixel remains near $|0\rangle$; a bright one rotates toward $|1\rangle$.
+Because each qubit is rotated independently, the four-qubit input is a
+\textbf{product state} with no entanglement. All entanglement in the output
+originates in the filter's CX gates.
+
+\section{Making Simulation Tractable}
+
+A direct implementation submits one simulator job per patch. At 16 patches per
+character and roughly 6{,}000 characters, that is approximately 96{,}000 jobs
+per pass over the dataset---several hours, which makes iteration impossible.
+
+Because the filter is \emph{fixed}, its unitary $U$ is identical for every patch.
+It is extracted once and applied as a batched matrix multiplication:
+\begin{equation}
+|\psi_{\text{out}}\rangle = U\,|\psi_{\text{in}}\rangle
+\end{equation}
+
+\honestnote{%
+\textbf{This is not an approximation.} It is the same linear algebra the
+simulator performs, without per-job overhead and without shot noise. The claim
+was verified rather than asserted: agreement with the shot-based implementation
+was measured at a maximum deviation of \textbf{0.0028} across random patches at
+200{,}000 shots, which is within sampling error. Processing time fell from hours
+to \textbf{0.15 seconds for 2{,}000 characters}.}
+
+\section{Readout Design}
+
+The obvious readout is per-qubit $P(\text{measure }1)$: four values per patch.
+
+But a 4-qubit circuit produces a distribution over 16 outcomes, and keeping only
+four marginals discards every \emph{correlation} the entangling layer created---
+precisely the component a classical product-state model could not have produced.
+Adding pairwise correlations
+\begin{equation}
+\langle Z_i Z_j\rangle = \sum_k P(k)\, z_i(k)\, z_j(k)
+\end{equation}
+recovers six additional values per patch, taking the readout from 4 to 10 values
+and the per-character feature vector from 64 to 160.
+
+\begin{table}[h]
+\centering
+\caption{Effect of readout design, all tiers pooled, matched classifier.}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Readout & Feature dimension & Accuracy \\
+\midrule
+Marginals only & 64 & 86.7\% \\
+Marginals $+$ $\langle Z_i Z_j\rangle$ & 160 & \textbf{92.2\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 5.5-point gain from readout design alone exceeds any difference measured
+between the quantum and classical filters. For quanvolutional approaches
+generally, how much of the output distribution is retained appears to matter more
+than which circuit produced it.
+
+\section{Comparison Against Classical Baselines}
+
+The comparison holds feature dimensionality fixed. Without that, a win would be
+indistinguishable from simply granting one method a wider representation. The
+classical control uses ten random filters over the same $2\times2$ patches at the
+same stride, producing exactly 160 features.
+
+\begin{table}[h]
+\centering
+\caption{Character accuracy, all tiers pooled.}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Extractor & Dimension & Accuracy \\
+\midrule
+Quanvolutional, marginals & 64 & 86.7\% \\
+Quanvolutional, $+\langle Z_iZ_j\rangle$ & 160 & 92.2\% \\
+Classical convolution, dimension-matched & 160 & 91.9\% \\
+Raw pixels, no feature extraction & 64 & \textbf{93.6\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Repeating over 30 paired train--test splits establishes which differences are
+real: the quantum-versus-classical gap is not distinguishable from noise
+($p \approx 0.2$--$0.3$, the quantum layer winning approximately half the
+splits), while the raw-pixel lead holds in all 30 ($p < 10^{-10}$).
+
+\honestnote{%
+\textbf{The quantum layer does not beat the classical baselines.} At matched
+dimensionality it ties a random classical convolution, and both lose to raw
+pixels at \emph{lower} dimensionality. The relevant comparison is therefore not
+quantum versus classical but untrained random feature map versus no feature map:
+at $8\times8$ the input is already close to information-minimal, so any fixed
+random projection discards more than it contributes. That the classical control
+fails identically is what identifies the cause as the untrained random character
+of the filter rather than anything quantum.}
+
+\section{Variational Circuit}
+
+The brief specified a \emph{variational} circuit, so the filter's eight $R_Y$
+angles were optimised against classification loss by gradient-free Powell search,
+starting from the untrained baseline's exact angle vector so that any improvement
+is attributable to optimisation alone. The classical control was trained
+identically---training only the quantum side would have inverted the fairness the
+untrained comparison was designed to preserve.
+
+\begin{table}[h]
+\centering
+\caption{Variational training on a sealed test partition of 1{,}807 crops.}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Trainable parameters & Accuracy & $\Delta$ \\
+\midrule
+Quantum, untrained & --- & 91.7\% & --- \\
+Quantum, trained & 8 & 90.6\% & $-1.1$ pt \\
+Classical, untrained & --- & 92.0\% & --- \\
+Classical, trained & 40 & 92.1\% & $+0.1$ pt \\
+Raw pixels & --- & \textbf{93.6\%} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Training does not close the gap, which strengthens rather than weakens the
+preceding section: the deficit is not caused by the filters being untrained,
+because training them does not help.
+
+\subsection{A Correction Worth Recording}
+
+An earlier version of this experiment reported a $+1.4$-point gain for the
+trained quantum filter, bringing it level with raw pixels. That result was
+wrong.
+
+The angle search had been run over the full dataset, and the final evaluation
+then used a fresh random split of that \emph{same} dataset---so the angles had
+been selected using rows that later appeared in the test set. Re-running with a
+sealed 30\% partition that the search never sees reduced the gain from $+1.4$
+points to approximately zero.
+
+The inflated figure is recorded here rather than discarded, because the
+difference between the two is the difference between a false headline claim and
+the actual finding.
+
+\subsection{One Property That Survives}
+
+The quantum filter produces its 160-dimensional feature space from
+\textbf{8 parameters} against the classical control's \textbf{40}. At the
+untrained baseline the two perform equivalently, so that $5\times$ parameter
+economy is real and costs nothing there. It does not survive this training
+protocol, and should not be reported without that qualification.
+
+\section{Deliverable Status}
+
+Complete. Quanvolutional layer implemented and verified against the reference
+simulator; readout design measured; dimension-matched classical comparison
+performed with significance testing; variational training implemented for both
+quantum and classical filters.
+
+\vspace{0.3cm}
+\noindent\textbf{Artifacts:} \texttt{integration/features.py},
+\texttt{track\_a\_vision/quanvolutional/train\_filter.py},
+\texttt{notebooks/02\_quanvolutional\_features.ipynb},
+\texttt{benchmarking/seed\_sweep.py}
+
+\end{document}
